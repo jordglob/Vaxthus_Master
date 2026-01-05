@@ -24,10 +24,31 @@ Detta projekt är en ESP32-baserad styrenhet för växtbelysning, skriven i C++ 
 
 1.  Klona detta repository.
 2.  Öppna projektet i VS Code med PlatformIO.
-3.  Redigera `src/main.cpp` och fyll i dina uppgifter:
-    *   `ssid` & `password` (WiFi)
-    *   `mqtt_server`, `mqtt_user`, `mqtt_pass`
-4.  Ladda upp till enheten.
+3.  **Viktigt - Konfiguration:**
+    
+    För att hantera lösenord säkert ingår inte filen `secrets.h` i repot. Du måste skapa den manuellt.
+    
+    1.  Skapa en ny fil i mappen `include/` och döp den till `secrets.h`.
+    2.  Klistra in följande kod i filen och byt ut uppgifterna mot dina egna:
+
+    ```cpp
+    #ifndef SECRETS_H
+    #define SECRETS_H
+
+    // WiFi
+    const char* ssid = "Ditt_WiFi_Namn";
+    const char* password = "Ditt_WiFi_Lösenord";
+
+    // MQTT
+    const char* mqtt_server = "din.mqtt.server.org";
+    const int mqtt_port = 1883;
+    const char* mqtt_user = "Ditt_MQTT_Användarnamn";
+    const char* mqtt_pass = "Ditt_MQTT_Lösenord";
+
+    #endif
+    ```
+
+4.  Ladda upp koden till enheten via PlatformIO.
 
 ## Användning
 
