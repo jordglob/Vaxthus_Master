@@ -93,9 +93,11 @@ Beskriver sekvensen av händelser när enheten startar upp (Boot Process).
 2.  **WiFi-anslutning:**
     *   Ansluter till SSID angivet i `secrets.h`.
     *   Displayen visar "WiFi: ..." och blockerar vidare exekvering tills anslutning är etablerad ("OK!").
+    *   **KRITISK PUNKT:** Om WiFi ligger nere vid strömavbrott/omstart fastnar enheten här. Ingen styrning (varken automatisk eller manuell) är möjlig förrän nätverket är tillbaka.
 3.  **Tidssynk (NTP):**
     *   Hämtar aktuell tid från `pool.ntp.org` för tidszon `CET-1CEST`.
     *   Systemet kräver giltig tid för att kunna köra Auto-schemat.
+    *   **Felhantering:** Om Internet saknas (men WiFi finns) startar enheten, men AUTO-läget förblir inaktivt (lamporna tänds ej). Manuell styrning via knappar fungerar dock.
 
 ### 5.2 MQTT Handskakning
 När WiFi är etablerat påbörjas MQTT-uppkopplingen. Detta sker antingen direkt vid start eller via `reconnect()` om anslutningen bryts.
