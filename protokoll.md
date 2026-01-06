@@ -20,7 +20,15 @@ Enheten prenumererar på kommandon via följande topics. Payload förväntas var
 
 **Obs:** Varje inkommande kommando triggar automatiskt **MANUELLT LÄGE**.
 
-### 2.2 Status (Utgående)
+### 2.2 Eco Mode / Power Save
+Ett speciellt läge för att spara energi (t.ex. vid högt elpris). När aktivt skalas ljusstyrkan ner med 50% i AUTO-läge.
+
+| Topic | Typ | Payload |
+|-------|-----|---------|
+| `.../powersave/set` | Switch | `ON` / `OFF` |
+| `.../powersave/state`| Status | `ON` / `OFF` |
+
+### 2.3 Status (Utgående)
 Vid ändring (via MQTT, Knappar eller Schema) publicerar enheten sin status.
 
 | Topic | Beskrivning |

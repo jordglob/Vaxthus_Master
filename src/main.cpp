@@ -89,6 +89,7 @@ int val_uv = 0;
 
 // Logik
 MenuSelection current_selection = SEL_ALL;
+bool powerSaveMode = false; // Sparläge (t.ex. vid högt elpris)
 
 // --------------------------------------------------------------------------
 // KNAPP HANTERING CLASS
@@ -247,6 +248,11 @@ void handleSchedule() {
     target_bri = map(current_minutes, TIME_SUNSET_START, TIME_NIGHT_START, 255, 0);
   }
 
+  // Applicera Power Save (50%) om aktivt
+  if (powerSaveMode) {
+      target_bri = target_bri / 2;
+  }
+
   // Uppdatera variablers om de ändrats
   int target_uv = map(target_bri, 0, 255, 0, UV_MAX_LIMIT); // UV skalas alltid 0-80% i auto-läge
 
@@ -376,6 +382,13 @@ void updateDisplay() {
     tft.setTextColor(TFT_CYAN, TFT_DARKGREY);
     tft.print("AUTO"); // Auto
   } 
+
+  // Visa ECO Mode
+  if (powerSaveMode) {
+      tft.setCursor(160, 7);
+      tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
+      tft.print("ECO");
+  }
 
   // Status Ikoner (enkla textmarkörer)
   // WiFi
@@ -537,6 +550,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (topicStr.indexOf("/white/set") > 0) light_type = "white";
   else if (topicStr.indexOf("/red/set") > 0) light_type = "red";
   else if (topicStr.indexOf("/uv/set") > 0) light_type = "uv";
+  else if (topicStr.indexOf("/powersave/set") > 0) {
+      // Hantera Power Save Switch
+      const char* s = doc["state"];
+      // Acceptera ON/OFF eller true/false
+      if (s) {
+          if (strcasecmp(s, "ON") == 0 || strcasecmp(s, "true") == 0) powerSaveMode = true;
+          else if (strcasecmp(s, "OFF") == 0 || strcasecmp(s, "false") == 0) powerSaveMode = false;
+          
+          // Bekräfta state
+          char stateTopic[64];
+          snprintf(stateTopic, sizeof(stateTopic), "%s/powersave/state", topic_prefix);
+          client.publish(stateTopic, powerSaveMode ? "ON" : "OFF");
+          
+          handleSchedule(); // Uppdatera direkt
+          updateDisplay(); 
+      }
+      return;
+  }
 
   if (light_type != "") {
     activateManualMode(); // Om HA ändrar något räknas det som manuellt
@@ -602,11 +633,131 @@ void reconnect() {
       sendDiscovery("Växtljus Röd", "red");
       sendDiscovery("Växtljus UV", "uv");
 
+      // Discovery för Power Save Switch
+      {
+         JsonDocument docSwitch;
+         docSwitch["name"] = "Växtljus Eco Mode";
+         docSwitch["unique_id"] = "vaxtljus_powersave";
+         docSwitch["command_topic"] = String(topic_prefix) + "/powersave/set";
+         docSwitch["state_topic"] = String(topic_prefix) + "/powersave/state";
+         docSwitch["payload_on"] = "ON";
+         docSwitch["payload_off"] = "OFF";
+         docSwitch["retain"] = true;
+         // Ikon: Leaf
+         docSwitch["icon"] = "mdi:leaf";
+
+         char buffer[512];
+         serializeJson(docSwitch, buffer);
+         char distopic[128];
+         snprintf(distopic, sizeof(distopic), "homeassistant/switch/bastun_vaxtljus_powersave/config");
+         client.publish(distopic, buffer, true);
+      }
+
       char sub_topic[100];
       snprintf(sub_topic, sizeof(sub_topic), "%s/+/set", topic_prefix);
       client.subscribe(sub_topic);
     }
   }
+}
+
+// --------------------------------------------------------------------------
+// INTRO DEMO (Starfield + Glitch Text)
+// --------------------------------------------------------------------------
+void runIntroSequence() {
+  const int NUM_STARS = 120;
+  float stars[NUM_STARS][3]; 
+  uint16_t starColors[NUM_STARS];
+  
+  // Init stjärnor
+  for(int i=0; i<NUM_STARS; i++) {
+    stars[i][0] = random(-160, 160);
+    stars[i][1] = random(-85, 85);
+    stars[i][2] = random(10, 400); 
+    starColors[i] = tft.color565(random(180,255), random(180,255), 255);
+  }
+
+  unsigned long startTime = millis();
+  float speed = 2.0;
+
+  TFT_eSprite frame = TFT_eSprite(&tft);
+  frame.setColorDepth(16);
+  // Fullskärms-sprite (använder PSRAM på S3)
+  if (!frame.createSprite(320, 170)) return; 
+
+  while(millis() - startTime < 6000) { 
+    // Avbryt på knapptryck
+    if(digitalRead(PIN_BTN_TOP) == LOW || digitalRead(PIN_BTN_BTM) == LOW) break;
+
+    frame.fillSprite(TFT_BLACK); 
+
+    unsigned long elapsed = millis() - startTime;
+    
+    // Warp speed effekt
+    if (elapsed < 2000) speed = 3.0 + (elapsed / 80.0); 
+    else if (elapsed > 4500) speed *= 0.88; 
+    
+    if(speed > 45) speed = 45;
+    if(speed < 1) speed = 1;
+
+    // Rita stjärnor
+    for(int i=0; i<NUM_STARS; i++) {
+        stars[i][2] -= speed;
+        
+        if(stars[i][2] <= 1) {
+            stars[i][0] = random(-400, 400); 
+            stars[i][1] = random(-400, 400);
+            stars[i][2] = 400; 
+            starColors[i] = tft.color565(random(200,255), random(200,255), 255);
+        }
+
+        float fov = 140.0;
+        float factor = fov / stars[i][2];
+        int x2d = 160 + (int)(stars[i][0] * factor);
+        int y2d = 85 + (int)(stars[i][1] * factor);
+
+        if(x2d >= 0 && x2d < 320 && y2d >= 0 && y2d < 170) {
+            if(speed > 10) {
+               // Warp lines
+               float prevFactor = fov / (stars[i][2] + speed + 5); 
+               int xPrev = 160 + (int)(stars[i][0] * prevFactor);
+               int yPrev = 85 + (int)(stars[i][1] * prevFactor);
+               frame.drawLine(xPrev, yPrev, x2d, y2d, starColors[i]);
+            } else {
+               frame.drawPixel(x2d, y2d, starColors[i]);
+            }
+        }
+    }
+
+    // Text & Glitch
+    frame.setTextDatum(MC_DATUM);
+    if(elapsed > 800 && elapsed < 3200) {
+        if(random(0,10) > 8) {
+            frame.setTextColor(TFT_GREEN, TFT_BLACK); 
+            frame.drawString("VAXTHUS", 160+random(-3,3), 85+random(-3,3), 4);
+        } else {
+            frame.setTextColor(TFT_WHITE, TFT_BLACK);
+            frame.drawString("VAXTHUS", 160, 85, 4);
+        }
+    } 
+    else if(elapsed > 3200 && elapsed < 5200) {
+        if(random(0,10) > 8) {
+            frame.setTextColor(TFT_MAGENTA, TFT_BLACK); 
+            frame.drawString("MASTER", 160+random(-3,3), 85+random(-3,3), 4);
+        } else {
+            frame.setTextColor(TFT_WHITE, TFT_BLACK);
+            frame.drawString("MASTER", 160, 85, 4);
+        }
+    }
+    else if(elapsed > 5200) {
+        if ((elapsed/150)%2) {
+             frame.setTextColor(TFT_CYAN, TFT_BLACK);
+             frame.drawString("SYSTEM READY", 160, 85, 2);
+        }
+    }
+    
+    frame.pushSprite(0, 0);
+  }
+  frame.deleteSprite();
 }
 
 // --------------------------------------------------------------------------
@@ -619,6 +770,9 @@ void setup() {
   // 1. Skärm
   tft.init();
   tft.setRotation(1); 
+  tft.setSwapBytes(true); // Bra för färger i Sprite
+
+  runIntroSequence();
   
   // Init Sprite
   footerSpr.createSprite(320, 25);
