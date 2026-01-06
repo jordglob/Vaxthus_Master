@@ -69,6 +69,7 @@ enum MenuSelection {
 WiFiClient espClient;
 PubSubClient client(espClient);
 TFT_eSPI tft = TFT_eSPI();
+TFT_eSprite footerSpr = TFT_eSprite(&tft); // Sprite för rullande text
 
 // --------------------------------------------------------------------------
 // STATE VARIABLER
@@ -173,6 +174,7 @@ ButtonHandler btnBtm(PIN_BTN_BTM);
 void publishOne(const char* type, int val);
 void updatePWM();
 void updateDisplay();
+void drawFooterTicker();
 void activateManualMode();
 
 // --------------------------------------------------------------------------
@@ -411,14 +413,35 @@ void updateDisplay() {
   drawLine(2, "ROD", val_red, TFT_RED);
   drawLine(3, "UV", val_uv, TFT_MAGENTA);
 
-  // Information footer
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.setTextDatum(BR_DATUM); // Bottom Right alignment
-  tft.drawString("BTN TOP: + / Byt / Auto(1s)", 315, 158);
-  tft.drawString("BTN BTM: - / Stang av", 315, 168);
-  tft.setTextDatum(TL_DATUM); // Reset to Top Left default
+  // Footer ritas nu av drawFooterTicker();
 }
+
+void drawFooterTicker() {
+  static int32_t xPos = 320;
+  static unsigned long lastScroll = 0;
+  const int SCROLL_DELAY = 40; // Hastighet på scroll
+
+  if (millis() - lastScroll < SCROLL_DELAY) return;
+  lastScroll = millis();
+
+  const char* msg = "INSTRUKTIONER: [TOPP] Enkelklick: Oka ljus | Dubbelklick: Byt menyval | Langtryck (1s): Aktivera AUTO-lage.   ***   [BOTTEN] Enkelklick: Minska ljus | Håll: Stang av (Manuell Noll)   ***   Vaxthus Master v1.1   ***   ";
+  
+  footerSpr.fillSprite(TFT_BLACK);
+  footerSpr.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  footerSpr.setTextSize(1);
+  footerSpr.drawString(msg, xPos, 8); // Y=8 för att centrera lite i spriten (höjd 25)
+
+  // Grön linje som avgränsare
+  footerSpr.drawFastHLine(0, 0, 320, TFT_DARKGREY);
+
+  footerSpr.pushSprite(0, 145); // Placera längst ner (170 - 25 = 145)
+
+  xPos--;
+  if (xPos < -1 * (int)tft.textWidth(msg)) {
+    xPos = 320;
+  }
+}
+
 
 // --------------------------------------------------------------------------
 // MQTT
@@ -536,7 +559,12 @@ void setup() {
 
   // 1. Skärm
   tft.init();
-  tft.setRotation(1); // 3 = Landscape/Flipped om usb är höger. 1 = Landscape.
+  tft.setRotation(1); 
+  
+  // Init Sprite
+  footerSpr.createSprite(320, 25);
+  footerSpr.fillSprite(TFT_BLACK);
+
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
@@ -594,6 +622,9 @@ void loop() {
   // Knapp Logik
   int clickTop = btnTop.update();
   int clickBtm = btnBtm.update();
+
+  // Animera footer
+  drawFooterTicker();
 
   // Kör schema-logik
   handleSchedule();
