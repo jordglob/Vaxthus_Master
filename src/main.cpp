@@ -362,8 +362,8 @@ void updateDisplay() {
 
   // === KANAL LISTA ===
   tft.setTextSize(2);
-  int yStart = 45;
-  int lineH = 35;
+  int yStart = 35; // Flyttat upp lite
+  int lineH = 28;  // Lite tajtare rader för att få plats med footer
 
   // Helper för att rita rader
   auto drawLine = [&](int idx, String label, int value, int color) {
