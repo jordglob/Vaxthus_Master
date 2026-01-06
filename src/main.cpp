@@ -329,10 +329,14 @@ void updatePWM() {
 // --------------------------------------------------------------------------
 
 void updateDisplay() {
-  // Undvik flimmer, rita bara om vid behov eller var 500ms för klockan
+  // Undvik flimmer, rita bara om vid behov eller var 500ms(normalt) / 50ms(inställning)
   static unsigned long lastDraw = 0;
-  // Om mindre än 200ms har gått, vänta (förutom om MQTT tvingar uppdatering)
-  if (millis() - lastDraw < 200) return; 
+  
+  int refreshRate = 200;
+  if (shouldShowClockMenu()) refreshRate = 50; // Snabbare uppdatering när vi ställer klockan
+
+  // Om mindre än refreshRate har gått, vänta (förutom om MQTT tvingar uppdatering)
+  if (millis() - lastDraw < refreshRate) return; 
   lastDraw = millis();
 
   // Hämta tid
@@ -346,9 +350,18 @@ void updateDisplay() {
   tft.setCursor(5, 7);
 
   // Klocka
+  char timeStr[16]; // Ökad buffert för sekunder och hundradelar
   if (timeValid) {
-    char timeStr[6];
-    sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    if (shouldShowClockMenu()) {
+       // Visa sekunder och hundradelar om vi ställer tiden
+       struct timeval tv;
+       gettimeofday(&tv, NULL);
+       int hundredths = tv.tv_usec / 10000;
+       sprintf(timeStr, "%02d:%02d:%02d.%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, hundredths);
+    } else {
+       // Normal visning
+       sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    }
     tft.print(timeStr);
   } else {
     tft.print("--:--");
