@@ -60,7 +60,8 @@ enum MenuSelection {
   SEL_ALL = 0,
   SEL_WHITE = 1,
   SEL_RED = 2,
-  SEL_UV = 3
+  SEL_UV = 3,
+  SEL_CLOCK = 4
 };
 
 // --------------------------------------------------------------------------
@@ -176,10 +177,19 @@ void updatePWM();
 void updateDisplay();
 void drawFooterTicker();
 void activateManualMode();
+void adjustTime(long deltaSec);
 
 // --------------------------------------------------------------------------
 // HJÄLPFUNKTIONER
 // --------------------------------------------------------------------------
+
+void adjustTime(long deltaSec) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  tv.tv_sec += deltaSec;
+  settimeofday(&tv, NULL);
+  updateDisplay();
+}
 
 void activateManualMode() {
   manual_mode = true;
@@ -413,6 +423,23 @@ void updateDisplay() {
   drawLine(2, "ROD", val_red, TFT_RED);
   drawLine(3, "UV", val_uv, TFT_MAGENTA);
 
+  // MANUELL KLOCKA (Nytt menyval)
+  int y = yStart + (4 * lineH);
+  if (current_selection == SEL_CLOCK) {
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.drawString(">", 5, y);
+    
+    // Instruktion istället för värde
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK); 
+    tft.drawString("TID: +1h / +1m", 150, y);
+  } else {
+    tft.setTextColor(TFT_BLACK, TFT_BLACK);
+    tft.drawString(">", 5, y);
+  }
+  
+  tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  tft.drawString("STALL TID", 30, y);
+
   // Footer ritas nu av drawFooterTicker();
 }
 
@@ -636,14 +663,19 @@ void loop() {
   if (clickTop == 1) { 
     // ENKEL: Öka ljusstyrka (+25 av 255 ≈ 10%)
     Serial.println("TOP: Single Click (Brightness +)");
-    adjustBrightness(25);
+    if (current_selection == SEL_CLOCK) {
+      adjustTime(3600); // +1 Timme
+    } else {
+      adjustBrightness(25);
+    }
   } 
   else if (clickTop == 2) {
-    // DUBBEL: Byt Kanal (Loopa: All -> White -> Red -> UV -> All)
+    // DUBBEL: Byt Kanal (Loopa: All -> White -> Red -> UV -> Clock -> All)
     Serial.println("TOP: Double Click (Next Channel)");
     if (current_selection == SEL_ALL) current_selection = SEL_WHITE;
     else if (current_selection == SEL_WHITE) current_selection = SEL_RED;
     else if (current_selection == SEL_RED) current_selection = SEL_UV;
+    else if (current_selection == SEL_UV) current_selection = SEL_CLOCK;
     else current_selection = SEL_ALL;
     updateDisplay();
   }
@@ -659,12 +691,18 @@ void loop() {
   if (clickBtm == 1) {
     // ENKEL: Minska ljusstyrka
     Serial.println("BTM: Single Click (Brightness -)");
-    adjustBrightness(-25);
+    if (current_selection == SEL_CLOCK) {
+      adjustTime(60); // +1 Minut
+    } else {
+      adjustBrightness(-25);
+    }
   }
   else if (clickBtm == 2) {
     // DUBBEL: Stäng av vald kanal helt (0%)
     Serial.println("BTM: Double Click (Turn Off Selected)");
-    setChannelOff();
+    if (current_selection != SEL_CLOCK) {
+       setChannelOff();
+    }
   }
 
   updateDisplay();
