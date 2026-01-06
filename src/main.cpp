@@ -42,9 +42,9 @@ const unsigned long MANUAL_TIMEOUT_MS = 45 * 60 * 1000; // 45 minuter
 // 05:30 = 5*60 + 30 = 330
 // 22:00 = 22*60 = 1320
 const int TIME_SUNRISE_START = 330; 
-const int TIME_DAY_START = 390;     // 06:30 (1h uppgång)
-const int TIME_SUNSET_START = 1260; // 21:00
-const int TIME_NIGHT_START = 1320;  // 22:00 (1h nedgång)
+const int TIME_DAY_START = 450;     // 07:30 (2h uppgång)
+const int TIME_SUNSET_START = 1200; // 20:00
+const int TIME_NIGHT_START = 1320;  // 22:00 (2h nedgång)
 
 // PWM Inställningar
 const int PWM_FREQ = 5000;
@@ -333,33 +333,33 @@ void updateDisplay() {
   }
 
   // Visa MODE (A=Auto, M=Manuell)
-  tft.setCursor(80, 7);
+  tft.setCursor(100, 7);
   if (manual_mode) {
     tft.setTextColor(TFT_ORANGE, TFT_DARKGREY);
-    tft.print("M"); // Manuell
+    tft.print("MAN"); // Manuell
   } else {
     tft.setTextColor(TFT_CYAN, TFT_DARKGREY);
-    tft.print("A"); // Auto
+    tft.print("AUTO"); // Auto
   } 
 
   // Status Ikoner (enkla textmarkörer)
   // WiFi
-  int xPos = 120;
+  int xPos = 200;
   if (WiFi.status() == WL_CONNECTED) {
     tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
-    tft.drawString("W", xPos, 7);
+    tft.drawString("WIFI", xPos, 7);
   } else {
     tft.setTextColor(TFT_RED, TFT_DARKGREY);
-    tft.drawString("W", xPos, 7);
+    tft.drawString("WIFI", xPos, 7);
   }
 
   // MQTT
   if (client.connected()) {
     tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
-    tft.drawString("M", xPos + 25, 7);
+    tft.drawString("MQTT", xPos + 70, 7);
   } else {
     tft.setTextColor(TFT_RED, TFT_DARKGREY);
-    tft.drawString("M", xPos + 25, 7);
+    tft.drawString("MQTT", xPos + 70, 7);
   }
 
   // === KANAL LISTA ===
