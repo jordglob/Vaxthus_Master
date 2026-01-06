@@ -32,6 +32,19 @@ const int PIN_BTN_BTM = 0;
 // Knapp Konfig
 const int DEBOUNCE_MS = 50;
 const int DOUBLE_CLICK_MS = 300; // Tid för att registrera dubbelklick
+const int LONG_PRESS_MS = 1000; // 1 sekund för långt tryck
+
+// Schema & Begränsningar
+const int UV_MAX_LIMIT = 204; // 80% av 255
+const unsigned long MANUAL_TIMEOUT_MS = 45 * 60 * 1000; // 45 minuter
+
+// Start/Stopp tider (Minuter sedan midnatt)
+// 05:30 = 5*60 + 30 = 330
+// 22:00 = 22*60 = 1320
+const int TIME_SUNRISE_START = 330; 
+const int TIME_DAY_START = 390;     // 06:30 (1h uppgång)
+const int TIME_SUNSET_START = 1260; // 21:00
+const int TIME_NIGHT_START = 1320;  // 22:00 (1h nedgång)
 
 // PWM Inställningar
 const int PWM_FREQ = 5000;
@@ -63,6 +76,10 @@ TFT_eSPI tft = TFT_eSPI();
 unsigned long lastReconnectAttempt = 0;
 unsigned long lastDisplayUpdate = 0;
 
+// Auto/Manual Logik
+bool manual_mode = false;
+unsigned long manual_timer_start = 0;
+
 // Ljusvärden (0-255). Om > 0 räknas det som ON.
 int val_white = 0;
 int val_red = 0;
@@ -81,6 +98,7 @@ class ButtonHandler {
     unsigned long lastChange;
     bool waitingForDoubleClick;
     unsigned long clickTimestamp;
+    bool longPressTriggered;
     
   public:
     ButtonHandler(int p) {
@@ -89,13 +107,14 @@ class ButtonHandler {
       lastChange = 0;
       waitingForDoubleClick = false;
       clickTimestamp = 0;
+      longPressTriggered = false;
     }
 
     void init() {
       pinMode(pin, INPUT_PULLUP);
     }
 
-    // Returnerar: 0=Inget, 1=Enkel, 2=Dubbel
+    // Returnerar: 0=Inget, 1=Enkel, 2=Dubbel, 3=Långt tryck
     int update() {
       int reading = digitalRead(pin);
       int result = 0;
@@ -106,26 +125,37 @@ class ButtonHandler {
           state = reading;
           if (state == LOW) {
             // Knapp trycktes ner
+            longPressTriggered = false;
           } else {
             // Knapp släpptes upp
-            if (waitingForDoubleClick) {
-              // Vi fick ett andra klick inom tiden!
-              result = 2;
-              waitingForDoubleClick = false;
-            } else {
-              // Första klicket, starta timer
-              waitingForDoubleClick = true;
-              clickTimestamp = now;
+            if (!longPressTriggered) {
+              if (waitingForDoubleClick) {
+                result = 2; // Dubbel
+                waitingForDoubleClick = false;
+              } else {
+                // Potential enkel
+                waitingForDoubleClick = true;
+                clickTimestamp = now;
+              }
             }
           }
         }
         lastChange = now;
       }
 
+      // Detektera långt tryck (medan knappen hålls nere)
+      if (state == LOW && !longPressTriggered) {
+        if (now - lastChange > LONG_PRESS_MS) {
+            longPressTriggered = true;
+            result = 3; // Lång
+            waitingForDoubleClick = false;
+        }
+      }
+
       // Check timeout for single click
       if (waitingForDoubleClick && result == 0) {
         if ((now - clickTimestamp) > DOUBLE_CLICK_MS) {
-          result = 1;
+          result = 1; // Enkel
           waitingForDoubleClick = false;
         }
       }
@@ -143,14 +173,71 @@ ButtonHandler btnBtm(PIN_BTN_BTM);
 void publishOne(const char* type, int val);
 void updatePWM();
 void updateDisplay();
+void activateManualMode();
 
 // --------------------------------------------------------------------------
 // HJÄLPFUNKTIONER
 // --------------------------------------------------------------------------
 
+void activateManualMode() {
+  manual_mode = true;
+  manual_timer_start = millis();
+}
+
+// Hanterar schemaläggning
+void handleSchedule() {
+  // Om vi är i manuellt läge, kolla timeout
+  if (manual_mode) {
+    if (millis() - manual_timer_start > MANUAL_TIMEOUT_MS) {
+      manual_mode = false;
+      Serial.println("Manual timeout. Back to INFO/AUTO.");
+    } else {
+      return; // Gör inget, låt användaren bestämma
+    }
+  }
+
+  // Hämta tid
+  struct tm ti;
+  if (!getLocalTime(&ti)) return; // Ingen tid än
+
+  int current_minutes = ti.tm_hour * 60 + ti.tm_min;
+  int target_bri = 0;
+
+  // Räkna ut ljusstyrka baserat på tid
+  if (current_minutes < TIME_SUNRISE_START || current_minutes >= TIME_NIGHT_START) {
+    // NATT (22:00 - 05:30)
+    target_bri = 0;
+  } 
+  else if (current_minutes >= TIME_SUNRISE_START && current_minutes < TIME_DAY_START) {
+    // SOLUPPGÅNG (05:30 - 06:30)
+    // Mappa tiden (330 till 390) till styrkan (0 till 255)
+    target_bri = map(current_minutes, TIME_SUNRISE_START, TIME_DAY_START, 0, 255);
+  }
+  else if (current_minutes >= TIME_DAY_START && current_minutes < TIME_SUNSET_START) {
+    // DAG (06:30 - 21:00)
+    target_bri = 255;
+  }
+  else if (current_minutes >= TIME_SUNSET_START && current_minutes < TIME_NIGHT_START) {
+    // SKYMNING (21:00 - 22:00)
+    // Mappa tiden (1260 till 1320) till styrkan (255 till 0)
+    target_bri = map(current_minutes, TIME_SUNSET_START, TIME_NIGHT_START, 255, 0);
+  }
+
+  // Uppdatera variablers om de ändrats
+  int target_uv = map(target_bri, 0, 255, 0, UV_MAX_LIMIT); // UV skalas alltid 0-80% i auto-läge
+
+  if (val_white != target_bri || val_red != target_bri || val_uv != target_uv) {
+     val_white = target_bri;
+     val_red = target_bri;
+     val_uv = target_uv;
+     updatePWM();
+  }
+}
+
 // Ändra ljusstyrka på vald kanal
 // amount kan vara positivt (öka) eller negativt (minska)
 void adjustBrightness(int amount) {
+  activateManualMode(); // Trigga manuellt läge
   bool changed = false;
   
   // VIT
@@ -190,6 +277,7 @@ void adjustBrightness(int amount) {
 }
 
 void setChannelOff() {
+  activateManualMode(); // Trigga manuellt läge
   bool changed = false;
   if (current_selection == SEL_ALL || current_selection == SEL_WHITE) {
     val_white = 0; publishOne("white", val_white); changed = true;
@@ -227,11 +315,7 @@ void updateDisplay() {
   struct tm timeinfo;
   bool timeValid = getLocalTime(&timeinfo);
 
-  // Rensa skärm (eller delar av den, men fillScreen är enklast för ren kod)
-  tft.fillScreen(TFT_BLACK);
-
-  // === HEADER (TID & STATUS) ===
-  tft.fillRect(0, 0, 320, 30, TFT_DARKGREY); // Header bakgrund
+  tft.fillRect(0, 0, 320, 30, TFT_DARKGREY); 
   
   tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
   tft.setTextSize(2); // Medelstorlek
@@ -245,6 +329,16 @@ void updateDisplay() {
   } else {
     tft.print("--:--");
   }
+
+  // Visa MODE (A=Auto, M=Manuell)
+  tft.setCursor(80, 7);
+  if (manual_mode) {
+    tft.setTextColor(TFT_ORANGE, TFT_DARKGREY);
+    tft.print("M"); // Manuell
+  } else {
+    tft.setTextColor(TFT_CYAN, TFT_DARKGREY);
+    tft.print("A"); // Auto
+  } 
 
   // Status Ikoner (enkla textmarkörer)
   // WiFi
@@ -314,10 +408,10 @@ void updateDisplay() {
   // Information footer
   tft.setTextSize(1);
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.setCursor(5, 150);
-  tft.println("BTN TOP: + / Byt Kanal");
-  tft.setCursor(5, 160);
-  tft.println("BTN BTM: - / Stang av");
+  tft.setTextDatum(BR_DATUM); // Bottom Right alignment
+  tft.drawString("BTN TOP: + / Byt / Auto(1s)", 315, 158);
+  tft.drawString("BTN BTM: - / Stang av", 315, 168);
+  tft.setTextDatum(TL_DATUM); // Reset to Top Left default
 }
 
 // --------------------------------------------------------------------------
@@ -357,6 +451,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   else if (topicStr.indexOf("/uv/set") > 0) light_type = "uv";
 
   if (light_type != "") {
+    activateManualMode(); // Om HA ändrar något räknas det som manuellt
     int* targetVal = nullptr;
     if (light_type == "white") targetVal = &val_white;
     if (light_type == "red") targetVal = &val_red;
@@ -494,6 +589,9 @@ void loop() {
   int clickTop = btnTop.update();
   int clickBtm = btnBtm.update();
 
+  // Kör schema-logik
+  handleSchedule();
+
   // --- KNAPP TOP (Upp / Byt) ---
   if (clickTop == 1) { 
     // ENKEL: Öka ljusstyrka (+25 av 255 ≈ 10%)
@@ -507,6 +605,13 @@ void loop() {
     else if (current_selection == SEL_WHITE) current_selection = SEL_RED;
     else if (current_selection == SEL_RED) current_selection = SEL_UV;
     else current_selection = SEL_ALL;
+    updateDisplay();
+  }
+  else if (clickTop == 3) {
+    // LÅNG: Återgå till AUTO
+    Serial.println("TOP: Long Press (Restore Auto)");
+    manual_mode = false;
+    handleSchedule(); // Applicera schema direkt
     updateDisplay();
   }
 
