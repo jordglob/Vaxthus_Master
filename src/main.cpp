@@ -183,6 +183,18 @@ void adjustTime(long deltaSec);
 // HJÄLPFUNKTIONER
 // --------------------------------------------------------------------------
 
+bool isTimeValid() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return false;
+  if (timeinfo.tm_year < (2022 - 1900)) return false; // Säkerställ att vi inte är på 1970
+  return true;
+}
+
+bool shouldShowClockMenu() {
+  // Visa bara menyvalet om WiFi saknas ELLER tiden är ogiltig
+  return (WiFi.status() != WL_CONNECTED || !isTimeValid());
+}
+
 void adjustTime(long deltaSec) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -423,22 +435,29 @@ void updateDisplay() {
   drawLine(2, "ROD", val_red, TFT_RED);
   drawLine(3, "UV", val_uv, TFT_MAGENTA);
 
-  // MANUELL KLOCKA (Nytt menyval)
-  int y = yStart + (4 * lineH);
-  if (current_selection == SEL_CLOCK) {
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.drawString(">", 5, y);
+  // MANUELL KLOCKA (Endast om relevant)
+  if (shouldShowClockMenu()) {
+    int y = yStart + (4 * lineH);
+    if (current_selection == SEL_CLOCK) {
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      tft.drawString(">", 5, y);
+      
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK); 
+      tft.drawString("TID: +1h / +1m", 150, y);
+    } else {
+      tft.setTextColor(TFT_BLACK, TFT_BLACK);
+      tft.drawString(">", 5, y);
+      // Rensa eventuell instruktionstext
+      tft.drawString("              ", 150, y);
+    }
     
-    // Instruktion istället för värde
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK); 
-    tft.drawString("TID: +1h / +1m", 150, y);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.drawString("STALL TID", 30, y);
   } else {
-    tft.setTextColor(TFT_BLACK, TFT_BLACK);
-    tft.drawString(">", 5, y);
+     // Om menyn försvinner, se till att radera den gamla texten så den inte "spökar"
+     int y = yStart + (4 * lineH);
+     tft.fillRect(0, y, 320, 30, TFT_BLACK);
   }
-  
-  tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.drawString("STALL TID", 30, y);
 
   // Footer ritas nu av drawFooterTicker();
 }
@@ -675,7 +694,11 @@ void loop() {
     if (current_selection == SEL_ALL) current_selection = SEL_WHITE;
     else if (current_selection == SEL_WHITE) current_selection = SEL_RED;
     else if (current_selection == SEL_RED) current_selection = SEL_UV;
-    else if (current_selection == SEL_UV) current_selection = SEL_CLOCK;
+    else if (current_selection == SEL_UV) {
+       // Hoppa bara till klockan om den behövs
+       if (shouldShowClockMenu()) current_selection = SEL_CLOCK;
+       else current_selection = SEL_ALL;
+    }
     else current_selection = SEL_ALL;
     updateDisplay();
   }
