@@ -583,18 +583,12 @@ void setup() {
   ledcAttachPin(PIN_UV, CH_UV);
   updatePWM();
 
-  // 4. WiFi
+  // 4. WiFi (Icke-blockerande)
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  tft.print("WiFi: ");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    tft.print(".");
-  }
-  tft.println(" OK!");
+  tft.println("Connect WiFi...");
 
   // 5. Tid / NTP
-  tft.println("Syncing Time...");
   configTzTime(timezone_info, ntpServer);
 
   // 6. MQTT
@@ -602,21 +596,30 @@ void setup() {
   client.setCallback(callback);
   client.setBufferSize(1024);
   
-  delay(500);
+  delay(1000);
   tft.fillScreen(TFT_BLACK);
 }
 
 void loop() {
-  // MQTT & WiFi Underhåll
-  if (!client.connected()) {
-    unsigned long now = millis();
-    if (now - lastReconnectAttempt > 5000) {
-      lastReconnectAttempt = now;
-      if (WiFi.status() == WL_CONNECTED) reconnect();
-      else WiFi.reconnect();
+  unsigned long now = millis();
+
+  // WiFi Återanslutning (om det tappats eller aldrig lyckats)
+  static unsigned long lastWiFiCheck = 0;
+  if ((WiFi.status() != WL_CONNECTED) && (now - lastWiFiCheck > 10000)) {
+    lastWiFiCheck = now;
+    WiFi.reconnect();
+  }
+
+  // MQTT Underhåll
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!client.connected()) {
+      if (now - lastReconnectAttempt > 5000) {
+        lastReconnectAttempt = now;
+        reconnect();
+      }
+    } else {
+      client.loop();
     }
-  } else {
-    client.loop();
   }
 
   // Knapp Logik
