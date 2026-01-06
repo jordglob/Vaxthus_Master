@@ -380,6 +380,10 @@ void updateDisplay() {
     if (isSelected) {
       tft.setTextColor(TFT_YELLOW, TFT_BLACK);
       tft.drawString(">", 5, y);
+    } else {
+      // Sudda markören om den inte är vald
+      tft.setTextColor(TFT_BLACK, TFT_BLACK);
+      tft.drawString(">", 5, y);
     }
 
     // Sätt färg
@@ -388,14 +392,16 @@ void updateDisplay() {
     // Label
     tft.drawString(label, 30, y);
 
-    // Värde % (Visa inte procent på "ALLA" om de är olika, men vi visar --- isf)
+    // Värde % 
     if (idx == 0) {
-      // ALLA raden
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.drawString("", 200, y); 
+      // ALLA raden - Rensa eventuellt gammalt skräp
+      tft.setTextColor(TFT_BLACK, TFT_BLACK);
+      tft.drawString("100%  ", 220, y); 
     } else {
       int pct = map(value, 0, 255, 0, 100);
-      String pctStr = String(pct) + "%";
+      // Lägg till mellanslag på slutet för att sudda tidigare bredare text (t.ex. 100% vs 99%)
+      String pctStr = String(pct) + "%  "; 
+      tft.setTextColor(color, TFT_BLACK); // Sätt färgen igen för säkerhets skull
       tft.drawString(pctStr, 220, y);
     }
   };
