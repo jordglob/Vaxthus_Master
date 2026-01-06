@@ -84,3 +84,31 @@ Aktiveras vid:
 | | Långtryck (1s) | Återställ till AUTO-läge |
 | **BTM (Pin 0)** | Enkelklick | Minska ljusstyrka (-10%) |
 | | Dubbelklick | Stäng av vald kanal helt (0%) |
+
+## 5. Uppstart & Handskakning
+Beskriver sekvensen av händelser när enheten startar upp (Boot Process).
+
+### 5.1 Boot Sekvens (Initiering)
+1.  **Hårdvara:** Initierar Display, Knappar och PWM-kanaler (LEDs startar alltid på 0 / svart).
+2.  **WiFi-anslutning:**
+    *   Ansluter till SSID angivet i `secrets.h`.
+    *   Displayen visar "WiFi: ..." och blockerar vidare exekvering tills anslutning är etablerad ("OK!").
+3.  **Tidssynk (NTP):**
+    *   Hämtar aktuell tid från `pool.ntp.org` för tidszon `CET-1CEST`.
+    *   Systemet kräver giltig tid för att kunna köra Auto-schemat.
+
+### 5.2 MQTT Handskakning
+När WiFi är etablerat påbörjas MQTT-uppkopplingen. Detta sker antingen direkt vid start eller via `reconnect()` om anslutningen bryts.
+
+1.  **Connect:** Enheten ansluter till brokern med ett slumpmässigt ClientID (`ESP32Client-xxxx`).
+2.  **Discovery (Home Assistant):**
+    *   Enheten skickar omedelbart 3 st "Configuration"-meddelanden (ett för varje kanal).
+    *   Detta gör att Home Assistant automatiskt hittar ("upptäcker") enheterna utan manuell konfiguration i YAML-filer.
+3.  **Prenumeration (Subscribe):**
+    *   Enheten lyssnar på `bastun/vaxtljus/+/set` för att fånga upp kommandon till alla tre kanaler.
+
+### 5.3 Initialt Tillstånd efter Boot
+*   Systemet startar alltid i **AUTO**-läge.
+*   Direkt efter uppstart körs funktionen `handleSchedule()`.
+*   Om klockan är mitt på dagen, rampar ljuset upp till korrekt nivå direkt. Om det är natt förblir det släckt.
+
