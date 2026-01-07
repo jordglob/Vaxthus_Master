@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
+#include <ArduinoOTA.h>
 #include "time.h"
 #include "secrets.h"
 
@@ -862,12 +863,28 @@ void setup() {
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
   client.setBufferSize(1024);
+
+  // 7. OTA
+  ArduinoOTA.setHostname("vaxtlus-master-s3");
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) type = "sketch";
+    else type = "filesystem";
+    // NOTE: if updating FS this would be the place to unmount FS using SPIFFS.end()
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 100);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextSize(2);
+    tft.println("OTA UPDATE...");
+  });
+  ArduinoOTA.begin();
   
   delay(1000);
   tft.fillScreen(TFT_BLACK);
 }
 
 void loop() {
+  ArduinoOTA.handle(); 
   unsigned long now = millis();
 
   // WiFi Återanslutning (om det tappats eller aldrig lyckats)

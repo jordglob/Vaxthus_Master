@@ -49,7 +49,17 @@ Detta projekt är en ESP32-baserad styrenhet för växtbelysning, skriven i C++ 
     #endif
     ```
 
-4.  Ladda upp koden till enheten via PlatformIO.
+5.  **OTA (Trådlös Uppdatering):**
+    När enheten är installerad i t.ex. en bastu kan du uppdatera den trådlöst.
+    1.  Hitta enhetens IP-adress (syns i routern eller om du printar den till Serial).
+    2.  Öppna `platformio.ini` och avkommentera OTA-raderna:
+    ```ini
+    upload_protocol = espota
+    upload_port = 192.168.1.XXX  <-- Din enhets IP
+    ```
+    3.  Ladda upp som vanligt.
+
+6.  Ladda upp koden till enheten via PlatformIO.
 
 ## Användning
 
