@@ -71,6 +71,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite footerSpr = TFT_eSprite(&tft); // Sprite för rullande text
+TFT_eSprite headerSpr = TFT_eSprite(&tft); // Sprite för header (klocka/status) för att undvika flimmer
 
 // --------------------------------------------------------------------------
 // STATE VARIABLER
@@ -349,66 +350,68 @@ void updateDisplay() {
   struct tm timeinfo;
   bool timeValid = getLocalTime(&timeinfo);
 
-  tft.fillRect(0, 0, 320, 30, TFT_DARKGREY); 
+  // Rita på Header Sprite istället för direkt på skärmen
+  headerSpr.fillSprite(TFT_DARKGREY); 
   
-  tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
-  tft.setTextSize(2); // Medelstorlek
-  tft.setCursor(5, 7);
+  headerSpr.setTextColor(TFT_WHITE, TFT_DARKGREY);
+  headerSpr.setTextSize(2); 
+  headerSpr.setTextDatum(TL_DATUM); // Top Left
+  headerSpr.setCursor(5, 7);
 
   // Klocka
-  char timeStr[16]; // Ökad buffert för sekunder och hundradelar
+  char timeStr[16]; 
   if (timeValid) {
     if (current_selection == SEL_CLOCK) {
-       // Visa sekunder och hundradelar om vi ställer tiden
        struct timeval tv;
        gettimeofday(&tv, NULL);
        int hundredths = tv.tv_usec / 10000;
        sprintf(timeStr, "%02d:%02d:%02d.%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, hundredths);
     } else {
-       // Normal visning
        sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
     }
-    tft.print(timeStr);
+    headerSpr.print(timeStr);
   } else {
-    tft.print("--:--");
+    headerSpr.print("--:--");
   }
 
   // Visa MODE (A=Auto, M=Manuell)
-  tft.setCursor(100, 7);
+  headerSpr.setCursor(100, 7);
   if (manual_mode) {
-    tft.setTextColor(TFT_ORANGE, TFT_DARKGREY);
-    tft.print("MAN"); // Manuell
+    headerSpr.setTextColor(TFT_ORANGE, TFT_DARKGREY);
+    headerSpr.print("MAN"); 
   } else {
-    tft.setTextColor(TFT_CYAN, TFT_DARKGREY);
-    tft.print("AUTO"); // Auto
+    headerSpr.setTextColor(TFT_CYAN, TFT_DARKGREY);
+    headerSpr.print("AUTO"); 
   } 
 
   // Visa ECO Mode
   if (powerSaveMode) {
-      tft.setCursor(160, 7);
-      tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
-      tft.print("ECO");
+      headerSpr.setCursor(160, 7);
+      headerSpr.setTextColor(TFT_GREEN, TFT_DARKGREY);
+      headerSpr.print("ECO");
   }
 
-  // Status Ikoner (enkla textmarkörer)
-  // WiFi
-  int xPos = 200;
+  // Status (Rensa gamla röran, kör rent högerjusterat här nu)
+  headerSpr.setTextDatum(TR_DATUM); // Top Right
+  int xRight = 315;
+  
   if (WiFi.status() == WL_CONNECTED) {
-    tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
-    tft.drawString("WIFI", xPos, 7);
+    headerSpr.setTextColor(TFT_GREEN, TFT_DARKGREY);
+    headerSpr.drawString("WIFI", xRight, 7);
+    xRight -= 50;
   } else {
-    tft.setTextColor(TFT_RED, TFT_DARKGREY);
-    tft.drawString("WIFI", xPos, 7);
+    headerSpr.setTextColor(TFT_RED, TFT_DARKGREY);
+    headerSpr.drawString("NO-W", xRight, 7);
+    xRight -= 50;
+  }
+  
+  if (client.connected()) {
+     headerSpr.setTextColor(TFT_GREEN, TFT_DARKGREY);
+     headerSpr.drawString("MQTT", xRight, 7);
   }
 
-  // MQTT
-  if (client.connected()) {
-    tft.setTextColor(TFT_GREEN, TFT_DARKGREY);
-    tft.drawString("MQTT", xPos + 70, 7);
-  } else {
-    tft.setTextColor(TFT_RED, TFT_DARKGREY);
-    tft.drawString("MQTT", xPos + 70, 7);
-  }
+  // Pusha sprite till skärmen
+  headerSpr.pushSprite(0, 0);
 
   // === KANAL LISTA ===
   tft.setTextSize(2);
@@ -777,6 +780,9 @@ void setup() {
   // Init Sprite
   footerSpr.createSprite(320, 25);
   footerSpr.fillSprite(TFT_BLACK);
+  
+  headerSpr.createSprite(320, 30);
+  headerSpr.fillSprite(TFT_DARKGREY);
 
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
