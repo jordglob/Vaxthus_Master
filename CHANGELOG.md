@@ -2,7 +2,13 @@
 
 All notable changes to the **Vaxthus Master** project will be documented in this file.
 
-## [Unreleased]
+## [v1.3] - 2026-01-07
+### Added
+- **Settings Menu:** New menu page accessible after "STÄLL TID".
+- **Eco Toggle:** Ability to toggle Eco Mode directly from the device menu.
+- **Reboot:** Option to reboot the device from the menu.
+- **OTA:** Added support for Over-The-Air updates (`ArduinoOTA`).
+- **Flicker Free:** Implemented double buffering (Sprites) for the display header to remove flickering.
 
 ## [v1.2] - 2026-01-06
 ### Added
