@@ -339,7 +339,7 @@ void updateDisplay() {
   static unsigned long lastDraw = 0;
   
   int refreshRate = 200;
-  if (shouldShowClockMenu()) refreshRate = 50; // Snabbare uppdatering när vi ställer klockan
+  if (current_selection == SEL_CLOCK) refreshRate = 50; // Snabbare uppdatering när vi ställer klockan
 
   // Om mindre än refreshRate har gått, vänta (förutom om MQTT tvingar uppdatering)
   if (millis() - lastDraw < refreshRate) return; 
@@ -358,7 +358,7 @@ void updateDisplay() {
   // Klocka
   char timeStr[16]; // Ökad buffert för sekunder och hundradelar
   if (timeValid) {
-    if (shouldShowClockMenu()) {
+    if (current_selection == SEL_CLOCK) {
        // Visa sekunder och hundradelar om vi ställer tiden
        struct timeval tv;
        gettimeofday(&tv, NULL);
@@ -862,9 +862,10 @@ void loop() {
     else if (current_selection == SEL_WHITE) current_selection = SEL_RED;
     else if (current_selection == SEL_RED) current_selection = SEL_UV;
     else if (current_selection == SEL_UV) {
-       // Hoppa bara till klockan om den behövs
-       if (shouldShowClockMenu()) current_selection = SEL_CLOCK;
-       else current_selection = SEL_ALL;
+       current_selection = SEL_CLOCK;
+    }
+    else if (current_selection == SEL_CLOCK) {
+       current_selection = SEL_ALL;
     }
     else current_selection = SEL_ALL;
     updateDisplay();
