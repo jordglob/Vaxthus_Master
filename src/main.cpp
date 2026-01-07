@@ -61,8 +61,16 @@ enum MenuSelection {
   SEL_WHITE = 1,
   SEL_RED = 2,
   SEL_UV = 3,
-  SEL_CLOCK = 4
+  SEL_CLOCK = 4,
+  SEL_SETTINGS = 5
 };
+
+// Inställningsmenyns val
+enum SettingOption {
+  SET_ECO = 0,
+  SET_REBOOT = 1
+};
+int current_setting_option = 0; // Vilket val i settings-menyn vi står på
 
 // --------------------------------------------------------------------------
 // OBJEKT
@@ -480,12 +488,52 @@ void updateDisplay() {
       tft.drawString("              ", 150, y);
     }
     
-    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.drawString("STALL TID", 30, y);
   } else {
      // Om menyn försvinner, se till att radera den gamla texten så den inte "spökar"
-     int y = yStart + (4 * lineH);
+     // MEN: Om vi är i Settings-läget måste vi låta bli att sudda, för då ritar settings där.
+     if (current_selection != SEL_SETTINGS) {
+         int y = yStart + (4 * lineH);
+         tft.fillRect(0, y, 320, 60, TFT_BLACK); // Sudda lite mer för säkerhets skull
+     }
+  }
+
+  // SETTINGS MENY
+  if (current_selection == SEL_SETTINGS) {
+     int y = yStart + (4 * lineH); 
+     
+     // SUDDA RADEN (för att ta bort "STÄLL TID" om den råkade vara där)
      tft.fillRect(0, y, 320, 30, TFT_BLACK);
+     
+     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+     tft.drawString(">", 5, y);
+     tft.setTextColor(TFT_CYAN, TFT_BLACK);
+     tft.drawString("SETTINGS", 30, y);
+     
+     // Visa aktivt val under
+     int ySub = y + 25;
+     tft.fillRect(0, ySub, 320, 30, TFT_BLACK); // Rensa sub-raden
+     
+     // Option 1: ECO
+     if (current_setting_option == SET_ECO) {
+         tft.setTextColor(TFT_WHITE, TFT_BLACK);
+         tft.drawString("< ECO MODE >", 100, ySub);
+         if (powerSaveMode) {
+             tft.setTextColor(TFT_GREEN, TFT_BLACK);
+             tft.drawString("ON", 240, ySub);
+         } else {
+             tft.setTextColor(TFT_RED, TFT_BLACK);
+             tft.drawString("OFF", 240, ySub);
+         }
+     }
+     // Option 2: REBOOT
+     else if (current_setting_option == SET_REBOOT) {
+         tft.setTextColor(TFT_RED, TFT_BLACK);
+         tft.drawString("< REBOOT >", 100, ySub);
+         tft.setTextColor(TFT_WHITE, TFT_BLACK);
+         tft.drawString("PRESS BTM", 240, ySub);
+     }
   }
 
   // Footer ritas nu av drawFooterTicker();
@@ -857,7 +905,14 @@ void loop() {
     Serial.println("TOP: Single Click (Brightness +)");
     if (current_selection == SEL_CLOCK) {
       adjustTime(3600); // +1 Timme
-    } else {
+    } 
+    else if (current_selection == SEL_SETTINGS) {
+       // Byt inställningsval
+       current_setting_option++;
+       if (current_setting_option > 1) current_setting_option = 0;
+       updateDisplay();
+    }
+    else {
       adjustBrightness(25);
     }
   } 
@@ -871,6 +926,10 @@ void loop() {
        current_selection = SEL_CLOCK;
     }
     else if (current_selection == SEL_CLOCK) {
+       current_selection = SEL_SETTINGS;
+       current_setting_option = 0; // Reset till första val
+    }
+    else if (current_selection == SEL_SETTINGS) {
        current_selection = SEL_ALL;
     }
     else current_selection = SEL_ALL;
@@ -890,14 +949,32 @@ void loop() {
     Serial.println("BTM: Single Click (Brightness -)");
     if (current_selection == SEL_CLOCK) {
       adjustTime(60); // +1 Minut
-    } else {
+    } 
+    else if (current_selection == SEL_SETTINGS) {
+       // Utför vald inställning
+       if (current_setting_option == SET_ECO) {
+          powerSaveMode = !powerSaveMode; // Toggle ECO
+          // Rapportera state om MQTT är uppe
+          if(client.connected()) {
+             char stateTopic[64];
+             snprintf(stateTopic, sizeof(stateTopic), "%s/powersave/state", topic_prefix);
+             client.publish(stateTopic, powerSaveMode ? "ON" : "OFF");
+          }
+          handleSchedule(); // Applicera direkt
+       }
+       else if (current_setting_option == SET_REBOOT) {
+          ESP.restart();
+       }
+       updateDisplay();
+    }
+    else {
       adjustBrightness(-25);
     }
   }
   else if (clickBtm == 2) {
     // DUBBEL: Stäng av vald kanal helt (0%)
     Serial.println("BTM: Double Click (Turn Off Selected)");
-    if (current_selection != SEL_CLOCK) {
+    if (current_selection != SEL_CLOCK && current_selection != SEL_SETTINGS) {
        setChannelOff();
     }
   }
