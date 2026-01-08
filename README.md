@@ -91,6 +91,16 @@ Enheten har en inbyggd webbserver/dashboard.
 2.  Gå till `http://DIN_IP_ADRESS` i mobilen eller datorn.
 3.  Här kan du se status, styra alla kanaler med sliders och ändra inställningar.
 
+#### Skillnader mellan lägen
+
+| Funktion | Normalt Läge (WiFi) | AP-Läge (Ingen WiFi) |
+| :--- | :--- | :--- |
+| **Åtkomst** | `http://[Enhetens IP]` (Lokalt nätverk) | `http://192.168.4.1` (Direktanslutning) |
+| **Utseende** | Full Dashboard med sliders och knappar | Enkel statussida (Minimal UI) |
+| **Styrning** | Kanaler, Inställningar, Reboot | Enbart Reboot (Försök anslut igen) |
+| **Nätverk** | Kräver fungerande WiFi-router | Skapar eget nätverk "Vaxthus-Master" |
+| **Syfte** | Daglig drift och övervakning | Felsökning och nöd-omstart |
+
 ### Displayikoner
 *   **WIFI / NO-W:** WiFi Status.
 *   **MQTT:** Ansluten till mäklare.
