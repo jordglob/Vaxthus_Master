@@ -4,6 +4,9 @@ Detta projekt är en ESP32-baserad styrenhet för växtbelysning, skriven i C++ 
 
 ## Funktioner
 
+
+*   **Auto/Eco/Manual Lägen:** Automatisk dygnscykel, energisparläge vid höga elpriser, och manuell överskridning via knappar eller MQTT.
+*   **Offline-stöd:** Dedikerat AP-läge med QR-kod för snabbanslutning. Systemet "självläker" om WiFi kommer tillbaka.
 *   **Auto/Eco/Manual Lägen:** Automatisk dygnscykel, energisparläge vid höga elpriser, och manuell överskridning via knappar eller MQTT.
 *   **Offline-stöd:** Non-blocking boot och manuell klockinställning gör att systemet fungerar även utan WiFi.
 *   **Home Assistant Discovery:** Dyker automatiskt upp som tre dimbara lampor samt en Eco-switch i Home Assistant.
@@ -69,11 +72,24 @@ Enheten har ett menysystem där du kan välja att styra **ALLA** lampor samtidig
 
 | Knapp | Handling | Funktion |
 | :--- | :--- | :--- |
-| **Övre (GPIO 14)** | **Enkelklick** | **Öka** ljusstyrka (+10%) ELLER **+1h** i Klockmeny. |
-| **Övre (GPIO 14)** | **Dubbelklick** | **Byt kanal**. Stegar igenom: `ALLA` -> `VIT` -> `RÖD` -> `UV` -> `STÄLL TID` -> `ALLA`... |
+| **Övre (GPIO 14)** | **Enkelklick** | **Öka** ljusstyrka (+10%) ELLER **+1h** i Klockmeny ELLER **Nästa val** i Settings. |
+| **Övre (GPIO 14)** | **Dubbelklick** | **Byt kanal**. Stegar igenom: `ALLA` -> `VIT` -> `RÖD` -> `UV` -> `STÄLL TID` -> `SETTINGS` -> `ALLA`... |
 | **Övre (GPIO 14)** | **Långt Klick** | **Återställ AUTO**. Avbryter manuellt läge och återgår till schema. |
-| **Nedre (GPIO 0)** | **Enkelklick** | **Minska** ljusstyrka (-10%) ELLER **+1m** i Klockmeny. |
+| **Nedre (GPIO 0)** | **Enkelklick** | **Minska** ljusstyrka (-10%) ELLER **+1m** i Klockmeny ELLER **Utför val** i Settings. |
 | **Nedre (GPIO 0)** | **Dubbelklick** | **Stäng av** vald kanal helt (0%). |
+
+### Inställningsmeny (Settings)
+I denna meny kan du ändra systeminställningar. Använd övre knappen (Enkelklick) för att bläddra och nedre knappen (Enkelklick) för att ändra/bekräfta.
+
+*   **SPRAK / LANGUAGE:** Växla mellan Svenska (SV) och Engelska (EN).
+*   **ECO MODE:** Slå på/av energisparläge manuellt.
+*   **REBOOT:** Starta om enheten.
+
+### Webbgränssnitt (Nytt i v1.4)
+Enheten har en inbyggd webbserver/dashboard.
+1.  Hitta enhetens IP-adress (via din router eller Serial Monitor vid boot).
+2.  Gå till `http://DIN_IP_ADRESS` i mobilen eller datorn.
+3.  Här kan du se status, styra alla kanaler med sliders och ändra inställningar.
 
 ### Displayikoner
 *   **WIFI / NO-W:** WiFi Status.

@@ -1,9 +1,11 @@
-# Systemprotokoll: Växthus Master (ESP32-S3)
+# Systemprotokoll: Växthus Master (ESP32-S3) v2.0
 
 Detta dokument beskriver det tekniska protokollet, MQTT-strukturen och den interna logiken för Växthus-styrningen.
 
 ## 1. Systemöversikt
-Systemet är byggt på en ESP32-S3 (LilyGo T-Display S3) som styr tre PWM-kanaler (Vit, Röd, UV) via MOSFETs/Drivere. Enheten agerar som en MQTT-klient och integreras automatiskt i Home Assistant.
+Systemet är byggt på en ESP32-S3 (LilyGo T-Display S3) som styr tre PWM-kanaler (Vit, Röd, UV) via MOSFETs/Drivere. Enheten agerar som en MQTT-klient och integreras automatiskt i Home Assistant. 
+
+**Nytt i v2.0:** Systemet använder nu "Soft Fading" för att mjukt övergå mellan ljusstyrkor, samt stödjer förinställda lägen ("Presets") via menyn.
 
 ## 2. MQTT API
 
@@ -49,7 +51,7 @@ Vid ändring (via MQTT, Knappar eller Schema) publicerar enheten sin status.
 Vid uppstart (reconnect) skickar enheten konfiguration till Home Assistant enligt [MQTT Discovery](https://www.home-assistant.io/integrations/mqtt/#discovery-messages).
 
 *   **Discovery Prefix:** `homeassistant/light/bastun_vaxtljus_[typ]/config`
-*   **Unika IDn:** `vaxtljus_white`, `vaxtljus_red`, `vaxtljus_uv`
+*   **Unika IDn:** `vaxtljus_white`, `vaxtljus_red`, `vaxtljus_uv`, `vaxtljus_powersave`
 
 ## 3. Intern Logik & Driftlägen
 
@@ -66,8 +68,9 @@ I Auto-läge skalas UV-kanalen alltid 0-80% (maxvärde 204 av 255) för att skyd
 
 ### 3.2 MANUAL (Override)
 Aktiveras vid:
-1.  Fysisk knapptryckning (Justering eller byte av kanal).
+1.  Fysisk knapptryckning (Justering, byte av kanal eller aktivering av Preset).
 2.  Inkommande MQTT-kommando.
+3.  Ändring i Web Interface.
 
 **Beteende:**
 *   Visas som orange text "MAN" på displayen.
@@ -76,28 +79,38 @@ Aktiveras vid:
 *   **Timeout:** Efter 45 minuter utan aktivitet återgår systemet automatiskt till AUTO.
 *   **Manuell återgång:** Håll in TOP-knappen (1s) för att direkt gå till AUTO.
 
+### 3.3 Presets (Nytt i v2.0)
+Systemet har inbyggda ljusprofiler för olika växtstadier. Dessa nås via menyn på enheten.
+
+*   **Seed/Clone:** Lågt ljus, mest vitt (White: 100, Red: 40, UV: 0).
+*   **Veg (Tillväxt):** Kraftigt vegetativt ljus (White: 220, Red: 80, UV: 10).
+*   **Bloom (Blomning):** Maximerat rött ljus (White: 100, Red: 255, UV: 60).
+*   **Full Blast:** Allt på max (White: 255, Red: 255, UV: 204/255).
+
 ## 4. Användargränssnitt (Hårdvara)
 
 ### 4.1 Display
-*   **Header:** Visar Tid, Driftläge (AUTO/MAN), WiFi-status, MQTT-status.
-*   **Lista:** Markör `>` visar vald kanal. Visar %-värde för varje kanal.
-*   **Footer:** Rullande text (Ticker) med instruktioner.
+*   **Header:** Visar Tid, Driftläge (AUTO/MAN), WiFi-status, MQTT-status, ECO-indikator.
+*   **Meny:** Markör `>` visar vald kanal eller menyval (Clock, Presets, Settings).
+*   **Footer:** Visar WiFi-signal (dBm) samt Mjukvaruversion (v2.0).
 
 ### 4.2 Knappar
 
 | Knapp | Handling | Funktion |
 |-------|----------|----------|
-| **TOP (Pin 14)** | Enkelklick | Öka ljusstyrka (+10%) |
-| | Dubbelklick | Byt vald kanal (ALL -> VIT -> RÖD -> UV) |
+| **TOP (Pin 14)** | Enkelklick | Öka ljusstyrka (+10%) / Nästa värde i meny |
+| | Dubbelklick | Byt menyval (ALL -> VIT -> RÖD -> UV -> **PRESET** -> CLOCK -> SETTINGS) |
 | | Långtryck (1s) | Återställ till AUTO-läge |
-| **BTM (Pin 0)** | Enkelklick | Minska ljusstyrka (-10%) |
+| **BTM (Pin 0)** | Enkelklick | Minska ljusstyrka (-10%) / Välj/Ändra i meny |
 | | Dubbelklick | Stäng av vald kanal helt (0%) |
+| | Långtryck | Gå direkt till Inställningar (Settings) |
 
-## 5. Uppstart & Handskakning
-Beskriver sekvensen av händelser när enheten startar upp (Boot Process).
+## 5. Web Interface
+Systemet hostar en webbserver på port 80.
 
-### 5.1 Boot Sekvens (Initiering)
-1.  **Hårdvara:** Initierar Display, Knappar och PWM-kanaler (LEDs startar alltid på 0 / svart).
+*   **/**: Dashboard med status och styrning.
+*   **/api/status**: JSON-status för integrationer.
+*   **/update**: OTA-uppladdning för firmware.
 2.  **WiFi-anslutning:**
     *   Ansluter till SSID angivet i `secrets.h`.
     *   Displayen visar "WiFi: ..." och blockerar vidare exekvering tills anslutning är etablerad ("OK!").

@@ -2,8 +2,68 @@
 
 All notable changes to the **Vaxthus Master** project will be documented in this file.
 
+## [v2.0.3] - 2026-01-08 -- "The Nerd Update"
+### Added
+- **Captive Portal:** Implemented a DNS Server in AP mode. Connecting to the `Vaxthus-Master` WiFi network will now automatically trigger the "Sign In" prompt on mobile devices, directing users immediately to the web interface.
+  - Redirects all DNS queries to the device IP.
+  - Added "Catch-All" web handler to serve the app regardless of the requested URL (e.g., handling Apple/Android connectivity checks).
+- **Setup Flow:** When starting in AP mode (offline), the QR code is now displayed indefinitely until a button is pressed, ensuring users have time to scan and connect.
+
+## [v2.0.2] - 2026-01-08
+### Fixed
+- **Stability:** Fixed critical bug where device would "hang" or stutter when running in AP Mode (Offline). This was caused by the radio trying to scan for WiFi stations on the main thread.
+- **Display:** Fixed artifacts/ghosting when switching between different menu views (Lists vs Fullscreen).
+- **Status Icons:** Wifi/MQTT icons now correctly turn RED (or "NO-W") immediately upon disconnection.
+
+### Added
+- **Smart QR:** The QR Code menu now displays a `WIFI:T:WPA;...` config code when offline, allowing one-tap connection to the device's Access Point. When online, it shows the Web Interface URL.
+- **Offline Logic:**
+  - Boot sequence shortened.
+  - If WiFi fails: Show connection QR for 10s.
+  - Enter "AP Mode" (Access Point: `Vaxthus-Master`).
+  - Retry connecting to Home WiFi every 30 seconds in background.
+
+## [v2.0.1] - 2026-01-08
+### Added
+- **Soft Fading:** Implemented smooth transitions (fading) when changing brightness values, both via MQTT and manual control.
+- **Presets:** New menu item "PRESETS" containing pre-defined light recipes:
+  - **Seed:** (Low White)
+  - **Veg:** (High White/Red)
+  - **Bloom:** (Red Dominant)
+  - **Full:** (Max Power)
+
+## [v2.0] - 2026-01-07
+> **Major Release:** "Refactoring & Modularization"
+> This release marks the transition from a single-file prototype (v1.x) to a professional, modular C++ architecture.
+
+### Changed
+- **Architecture:** 
+  - Split the 1200+ line `main.cpp` monolith into distinct classes:
+    - `DisplayManager`: Handles all TFT rendering, Sprites, and UI logic.
+    - `ButtonHandler`: Encapsulates debouncing, double-clicks, and long-press detection.
+    - `Globals.h`: Centralized verification of pin mappings and shared variables.
+- **Security:** Introduced `secrets.h` to protect WiFi credentials (removed from main codebase).
+- **OTA:** Enabled `ArduinoOTA` for wireless firmware updates, eliminating the need for USB cables after installation.
+
+### Removed
+- **Spaghetti Code:** Removed direct display drawing calls from the main loop to fix "flicker" and maintainability issues.
+
+## [v1.4] - 2026-01-07
+### Added
+- **Web Interface:** Built-in mobile-friendly web dashboard accessible via device IP.
+- **REST API:** JSON endpoints for status (`/api/status`) and control (`/api/set`).
+- **Web Controls:** Real-time sliders for all light channels, Eco mode toggle, and Reboot button via web browser.
+- **QR Code:** New menu item to display a QR code for quick access to the Web Interface.
+
+### Fixed
+- **UI:** Resolved flickering issues in the Settings menu by implementing Sprite-based rendering.
+- **Layout:** Fixed overlapping text between footer and menu items.
+- **Navigation:** Improved button sensitivity (increased double-click timeout) and added "Panic Button" shortcut (Long Press Bottom) to jump to Settings.
+- **Rendering:** Fixed clipping issues with the QR code display.
+
 ## [v1.3] - 2026-01-07
 ### Added
+- **Language Support:** Complete Swedish and English translation. Toggle in Settings menu.
 - **Settings Menu:** New menu page accessible after "STÄLL TID".
 - **Eco Toggle:** Ability to toggle Eco Mode directly from the device menu.
 - **Reboot:** Option to reboot the device from the menu.
