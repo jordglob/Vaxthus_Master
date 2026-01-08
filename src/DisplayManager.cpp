@@ -248,7 +248,7 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
         // STRICT OPTIMIZATION: Only redraw QR if necessary (Entry or Lang change)
         // Ignore RSSI, Time, or background state changes!
         if (selChanged || langChanged || this->firstRun) {
-             drawQRInfo(lang);
+             drawQRInfo(lang, false);
         }
 
         
@@ -511,74 +511,97 @@ void DisplayManager::drawSettingsMenu(int setOpt, int lang, bool eco) {
      else tft.drawString("TOP: Next   |  BTM: Select/Toggle", 160, 165);
 }
 
-void DisplayManager::drawQRInfo(int lang) {
+void DisplayManager::drawQRInfo(int lang, bool isAPMode) {
       tft.fillScreen(TFT_WHITE);
       
-      String qrContent;
-      String infoText;
-      
-    // ---------------------------------------------------------
-    // SIDE-BY-SIDE LAYOUT FOR LANDSCAPE (320x170)
-    // ---------------------------------------------------------
+      int scale = 3; // 29*3 = 87px size
+      int yCommon = 25;
 
-    int scale = 3; // 29*3 = 87px size
-    int yCommon = 25;
-
-    // --- LEFT: WiFi Join ---
-    String qrWifi = "WIFI:T:WPA;S:Vaxthus-Master;P:vaxthus123;;";
-    QRCode qrcode;
-    uint8_t qrcodeData[qrcode_getBufferSize(3)];
-    qrcode_initText(&qrcode, qrcodeData, 3, 0, qrWifi.c_str());
-    
-    int x1 = 20; 
-    
-    for (uint8_t y = 0; y < qrcode.size; y++) {
-        for (uint8_t x = 0; x < qrcode.size; x++) {
-            if (qrcode_getModule(&qrcode, x, y)) {
-                tft.fillRect(x1 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
+      if (isAPMode) {
+        // --- AP MODE: SHOW 2 QR CODES ---
+        // Left: WiFi Credentials
+        String qrWifi = "WIFI:T:WPA;S:" + String(AP_SSID) + ";P:" + String(AP_PASS) + ";;";
+        QRCode qrcode;
+        uint8_t qrcodeData[qrcode_getBufferSize(3)];
+        qrcode_initText(&qrcode, qrcodeData, 3, 0, qrWifi.c_str());
+        
+        int x1 = 20; 
+        for (uint8_t y = 0; y < qrcode.size; y++) {
+            for (uint8_t x = 0; x < qrcode.size; x++) {
+                if (qrcode_getModule(&qrcode, x, y)) {
+                    tft.fillRect(x1 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
+                }
             }
         }
-    }
-    
-    tft.setTextDatum(TC_DATUM); // Center Top
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    tft.setTextSize(2);
-    tft.drawString("1. JOIN WIFI", x1 + (87/2), 5); // Title above
-    tft.setTextSize(1);
-    tft.drawString("Pass: vaxthus123", x1 + (87/2), yCommon + 87 + 5);
+        tft.setTextDatum(TC_DATUM);
+        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.setTextSize(2);
+        tft.drawString("1. JOIN WIFI", x1 + (87/2), 5);
+        tft.setTextSize(1);
+        tft.drawString("Pass: " + String(AP_PASS), x1 + (87/2), yCommon + 87 + 5);
 
-
-    // --- RIGHT: Web Link ---
-    String qrWeb = "http://192.168.4.1";
-    QRCode qrcode2;
-    uint8_t qrcodeData2[qrcode_getBufferSize(3)];
-    qrcode_initText(&qrcode2, qrcodeData2, 3, 0, qrWeb.c_str());
-    
-    int x2 = 180;
-
-    for (uint8_t y = 0; y < qrcode2.size; y++) {
-        for (uint8_t x = 0; x < qrcode2.size; x++) {
-            if (qrcode_getModule(&qrcode2, x, y)) {
-                tft.fillRect(x2 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
+        // Right: Web Link (192.168.4.1)
+        String qrWeb = "http://192.168.4.1";
+        QRCode qrcode2;
+        uint8_t qrcodeData2[qrcode_getBufferSize(3)];
+        qrcode_initText(&qrcode2, qrcodeData2, 3, 0, qrWeb.c_str());
+        
+        int x2 = 180;
+        for (uint8_t y = 0; y < qrcode2.size; y++) {
+            for (uint8_t x = 0; x < qrcode2.size; x++) {
+                if (qrcode_getModule(&qrcode2, x, y)) {
+                    tft.fillRect(x2 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
+                }
             }
         }
-    }
+        tft.setTextSize(2);
+        tft.drawString("2. OPEN APP", x2 + (87/2), 5);
+        tft.setTextSize(1);
+        tft.drawString("http://192.168.4.1", x2 + (87/2), yCommon + 87 + 5);
 
-    tft.setTextSize(2);
-    tft.drawString("2. OPEN APP", x2 + (87/2), 5);
-    tft.setTextSize(1);
-    tft.drawString("http://192.168.4.1", x2 + (87/2), yCommon + 87 + 5);
+      } else {
+        // --- NORMAL MODE: SHOW 1 QR CODE (Local IP) ---
+        String ipStr = "http://" + WiFi.localIP().toString();
+        QRCode qrcode;
+        uint8_t qrcodeData[qrcode_getBufferSize(3)];
+        qrcode_initText(&qrcode, qrcodeData, 3, 0, ipStr.c_str());
 
-    // --- Footer / Exit ---
-    tft.setTextColor(TFT_RED, TFT_WHITE);
-    tft.setTextSize(2); 
-    tft.setTextDatum(BC_DATUM); // Bottom Center
-    tft.drawString("EXIT >", 160, 165); 
+        int xCenter = (320 - (qrcode.size * scale)) / 2;
+        
+        for (uint8_t y = 0; y < qrcode.size; y++) {
+            for (uint8_t x = 0; x < qrcode.size; x++) {
+                if (qrcode_getModule(&qrcode, x, y)) {
+                    tft.fillRect(xCenter + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
+                }
+            }
+        }
+        tft.setTextDatum(TC_DATUM);
+        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.setTextSize(2);
+        if(lang==LANG_SV) tft.drawString("STYR VIA WEBBEN", 160, 5);
+        else tft.drawString("WEB INTERFACE", 160, 5);
+        
+        // Show URL slightly smaller
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_DARKGREY, TFT_WHITE);
+        tft.drawString(ipStr, 160, yCommon + (qrcode.size * scale) + 5);
+
+        // Show IP Address Distinctly for OTA
+        tft.setTextSize(2);
+        tft.setTextColor(TFT_BLUE, TFT_WHITE);
+        tft.drawString("IP: " + WiFi.localIP().toString(), 160, yCommon + (qrcode.size * scale) + 20);
+      }
+
+      // --- Footer / Exit ---
+      tft.setTextColor(TFT_RED, TFT_WHITE);
+      tft.setTextSize(2); 
+      tft.setTextDatum(BC_DATUM); 
+      tft.drawString("EXIT >", 160, 165); 
 }
 
 void DisplayManager::showAPScreen() {
     // Force draw using existing logic but hardcoded for AP
-    drawQRInfo(0); 
+    drawQRInfo(0, true); 
     // Overlay status
     tft.setTextColor(TFT_RED, TFT_WHITE);
     tft.setTextSize(2);
@@ -620,7 +643,8 @@ void DisplayManager::drawInfoPage(int lang) {
 
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.setTextDatum(BC_DATUM); 
-    tft.drawString("Build: " __DATE__ " " __TIME__, 160, 165);
+    String buildInfo = "Ver: " + String(FIRMWARE_VERSION) + " (" + String(__DATE__) + ")";
+    tft.drawString(buildInfo, 160, 165);
 }
 
 void DisplayManager::drawClockMenu(int lang) {

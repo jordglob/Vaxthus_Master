@@ -87,7 +87,7 @@ I denna meny kan du ändra systeminställningar. Använd övre knappen (Enkelkli
 
 ### Webbgränssnitt (Nytt i v1.4)
 Enheten har en inbyggd webbserver/dashboard.
-1.  Hitta enhetens IP-adress (via din router eller Serial Monitor vid boot).
+1.  Hitta enhetens IP-adress (via menyn **VISA QR** eller routern).
 2.  Gå till `http://DIN_IP_ADRESS` i mobilen eller datorn.
 3.  Här kan du se status, styra alla kanaler med sliders och ändra inställningar.
 

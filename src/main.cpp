@@ -13,6 +13,7 @@
 #include "secrets.h"
 #include "Globals.h"
 #include "DisplayManager.h"
+#include "APMode.h" // NEW: Isolerad AP-kod
 
 // DNSServer dnsServer; // REMOVED
 
@@ -272,9 +273,9 @@ void updateDisplay() {
         lastCpuUpdate = now;
     }
 
-    // Använder "v2.0" strängen för att fuska in CPU-load
-    char cpuStr[20];
-    snprintf(cpuStr, sizeof(cpuStr), "Loop: %dms", displayedLoopTime);
+    // Use defined Firmware Version instead of Loop Time
+    // char cpuStr[20];
+    // snprintf(cpuStr, sizeof(cpuStr), "Loop: %dms", displayedLoopTime);
 
     bool wifiC = (WiFi.status() == WL_CONNECTED);
     bool mqttC = client.connected();
@@ -284,7 +285,7 @@ void updateDisplay() {
                       val_white, val_red, val_uv, 
                       viewing_preset, 
                       wifiC, mqttC, 
-                      (int)cachedRSSI, cpuStr); 
+                      (int)cachedRSSI, FIRMWARE_VERSION); 
 }
 
 void publishOne(const char* type, int val) {
@@ -394,24 +395,8 @@ void reconnect() {
 }
 
 // --------------------------------------------------------------------------
-// MAIN AP LOOP (ISOLATED)
+// MAIN AP LOOP MOVED TO APMode.cpp
 // --------------------------------------------------------------------------
-void loopAP() {
-    // Endast WebServer och Display uppdateringar - INGET ANNAT
-    
-    // Hantera knappar för reboot/exit
-    int clickBtm = btnBtm.update();
-    if (clickBtm > 0) {
-        displayMgr.showMessage("Rebooting...");
-        delay(500);
-        ESP.restart();
-    }
-
-    // Uppdatera loop-tiden bara för debug, men rita inte om hela skärmen
-    // Vi litar på att showAPScreen() ritats en gång vid start.
-    
-    delay(10); // Ge tid till WiFi stacken att svara på HTTP requests
-}
 
 // --------------------------------------------------------------------------
 // MAIN
@@ -422,9 +407,27 @@ volatile int virtualClickBtm = 0;
 bool isAPMode = false; // Global flag
 
 void initWebServer() {
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
-  // ... Keeping api same ...
-  // OTA
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
+      if (isAPMode) {
+          // Simple AP Mode Landing Page
+          String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+          html += "<style>body{font-family:sans-serif;background:#222;color:#fff;text-align:center;padding:20px;}</style></head>";
+          html += "<body><h1>Vaxthus Master AP</h1>";
+          html += "<p>Mode: Access Point (No WiFi)</p>";
+          html += "<p>Version: " + String(FIRMWARE_VERSION) + "</p>";
+          html += "<button onclick=\"location.href='/reboot'\" style='padding:15px;font-size:20px;'>Reboot to Try WiFi</button>";
+          html += "</body></html>";
+          request->send(200, "text/html", html);
+      } else {
+          request->send_P(200, "text/html", index_html); 
+      }
+  });
+
+  server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/plain", "Rebooting...");
+      delay(1000);
+      ESP.restart();
+  });
   server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request){
     bool shouldReboot = !Update.hasError();
     request->send(200, "text/plain", shouldReboot ? "OK" : "FAIL");
@@ -472,14 +475,9 @@ void setup() {
       isAPMode = false;
   }
   else { 
-      // Fallback to AP Mode -> ENTER ISOLATED STATE
-      WiFi.disconnect(); 
-      delay(100);
-      WiFi.mode(WIFI_AP); // Ren AP mode, ingen STA scanning som stör
-      WiFi.softAP("Vaxthus-Master", "vaxthus123");
-      
-      isAPMode = true; // Flagga för att köra loopAP()
-      displayMgr.showAPScreen(); // Rita skärmen EN GÅNG
+      // Fallback to AP Mode -> ENTER ISOLATED STATE (Via APMode.cpp)
+      isAPMode = true; 
+      enterAPMode();
   }
 
   // PWM Setup (Still needed so lights don't float, but set to 0 or default)

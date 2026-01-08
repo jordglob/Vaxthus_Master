@@ -52,7 +52,7 @@ private:
     void drawFooter(int rssi, const char* version);
     void drawChannelList(MenuSelection sel, int lang, int vWhite, int vRed, int vUv);
     void drawSettingsMenu(int setOpt, int lang, bool eco);
-    void drawQRInfo(int lang);
+    void drawQRInfo(int lang, bool isAPMode);
     void drawInfoPage(int lang);
     void drawClockMenu(int lang);
     void drawPresetsMenu(int activePreset, int lang); // NEW

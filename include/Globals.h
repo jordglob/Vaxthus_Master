@@ -35,4 +35,10 @@ enum PlantPreset {
     PRESET_FULL   // Max All
 };
 
+// Global Version Control
+#define FIRMWARE_VERSION "v1.1.0"
+// AP Settings
+#define AP_SSID "Vaxthus-Master"
+#define AP_PASS "vaxthus123"
+
 #endif
