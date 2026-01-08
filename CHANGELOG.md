@@ -2,6 +2,17 @@
 
 All notable changes to the **Vaxthus Master** project will be documented in this file.
 
+## [v3.0.0] - 2026-01-08 -- "The Professional Update"
+### Changed
+- **Architecture (Major):** Complete refactor to Object-Oriented Programming (OOP). Replaced loose global variables and helper functions with a robust `LightChannel` class.
+- **Code hygiene:** `main.cpp` is significantly cleaner and easier to read.
+- **Display:** Footer updated to show Total Energy Usage in real-time.
+
+### Added
+- **Energy Metering:** The system now calculates energy consumption (Watt-hours) for each channel based on usage and intensity.
+- **MQTT Energy Reporting:** Publishes total energy stats to `<topic_prefix>/energy/total` every 60 seconds.
+- **LightChannel Class:** Encapsulates PWM control, fading logic, and power calculations into a single reusable component.
+
 ## [v2.1.0] - 2026-01-08 -- "The Isolation Update"
 ### Changed
 - **Architecture (Critical):** Implemented a "Trap Loop" architecture. When in AP Mode, the device now enters a completely isolated `loopAP()` cycle. This bypasses all heavy logic (MQTT, NTP sync attempts) that was causing >1500ms latency, making the device lightning fast even without an internet connection.

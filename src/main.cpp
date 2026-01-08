@@ -60,15 +60,11 @@ unsigned long lastReconnectAttempt = 0;
 bool manual_mode = false;
 unsigned long manual_timer_start = 0;
 
-// Targets (Vad vi VILL ha)
-int val_white = 0;
-int val_red = 0;
-int val_uv = 0;
-
-// Current (Vad PWM faktiskt är - för fading)
-float cur_white = 0;
-float cur_red = 0;
-float cur_uv = 0;
+// OBJEKT FÖR LJUSSTYRNING (NEW OOP ARCHITECTURE)
+// Assuming 12W for White/Red, 5W for UV
+LightChannel lightWhite(PIN_WHITE, CH_WHITE, 12.0);
+LightChannel lightRed(PIN_RED, CH_RED, 12.0);
+LightChannel lightUV(PIN_UV, CH_UV, 5.0);
 
 MenuSelection current_selection = SEL_ALL;
 int current_setting_option = 0; 
@@ -85,7 +81,7 @@ ButtonHandler btnBtm(PIN_BTN_BTM);
 // FUNKTIONER FRAMÅTDEKLARATION
 // --------------------------------------------------------------------------
 void publishOne(const char* type, int val);
-void updatePWM(); // Now handles update from CUR vars
+// updatePWM ej längre nödvändig
 void updateDisplay();
 void activateManualMode();
 void adjustTime(long deltaSec);
@@ -94,51 +90,38 @@ void adjustTime(long deltaSec);
 // LOGIK
 // --------------------------------------------------------------------------
 
-// NEW FEATURE 1: Soft Fading
-void handleFading() {
-    bool changed = false;
-    float step = 1.6; // Speed factor per loop (approx 5-10ms)
-    
-    // Helper lambda
-    auto fadeChannel = [&](float &cur, int target) {
-        if (abs(cur - target) < step) {
-             if(cur != target) { cur = target; return true; }
-        } else {
-             if (cur < target) cur += step;
-             else cur -= step;
-             return true;
-        }
-        return false;
-    };
+// handleFading borttagen - Nu hanteras detta av LightChannel-klasserna.
 
-    if (fadeChannel(cur_white, val_white)) changed = true;
-    if (fadeChannel(cur_red, val_red)) changed = true;
-    if (fadeChannel(cur_uv, val_uv)) changed = true;
-
-    if (changed) updatePWM();
-}
 
 void applyPreset(int preset) {
     activateManualMode();
+    int w=0, r=0, u=0;
+    
     switch(preset) {
         case PRESET_SEED:
-            val_white = 100; val_red = 40; val_uv = 0;
+            w = 100; r = 40; u = 0;
             break;
         case PRESET_VEG:
-            val_white = 220; val_red = 80; val_uv = 10;
+            w = 220; r = 80; u = 10;
             break;
         case PRESET_BLOOM:
-            val_white = 100; val_red = 255; val_uv = 60;
+            w = 100; r = 255; u = 60;
             break;
         case PRESET_FULL:
-            val_white = 255; val_red = 255; val_uv = UV_MAX_LIMIT;
+            w = 255; r = 255; u = UV_MAX_LIMIT;
             break;
     }
-    publishOne("white", val_white);
-    publishOne("red", val_red);
-    publishOne("uv", val_uv);
+    
+    lightWhite.setTarget(w);
+    lightRed.setTarget(r);
+    lightUV.setTarget(u);
+    
+    publishOne("white", w);
+    publishOne("red", r);
+    publishOne("uv", u);
     updateDisplay();
 }
+
 
 bool isTimeValid() {
   struct tm timeinfo;
@@ -196,11 +179,10 @@ void handleSchedule() {
 
   int target_uv = map(target_bri, 0, 255, 0, UV_MAX_LIMIT); 
 
-  if (val_white != target_bri || val_red != target_bri || val_uv != target_uv) {
-     val_white = target_bri;
-     val_red = target_bri;
-     val_uv = target_uv;
-     // Note: No explicit updatePWM call here, loop handles fading
+  if (lightWhite.getTarget() != target_bri || lightRed.getTarget() != target_bri) {
+     lightWhite.setTarget(target_bri);
+     lightRed.setTarget(target_bri);
+     lightUV.setTarget(target_uv);
   }
 }
 
@@ -209,19 +191,22 @@ void adjustBrightness(int amount) {
   bool changed = false;
   
   if (current_selection == SEL_ALL || current_selection == SEL_WHITE) {
-    int old = val_white;
-    val_white = constrain(val_white + amount, 0, 255);
-    if (old != val_white) { publishOne("white", val_white); changed = true; }
+    int old = lightWhite.getTarget();
+    int newVal = constrain(old + amount, 0, 255);
+    lightWhite.setTarget(newVal);
+    if (old != newVal) { publishOne("white", newVal); changed = true; }
   }
   if (current_selection == SEL_ALL || current_selection == SEL_RED) {
-    int old = val_red;
-    val_red = constrain(val_red + amount, 0, 255);
-    if (old != val_red) { publishOne("red", val_red); changed = true; }
+    int old = lightRed.getTarget();
+    int newVal = constrain(old + amount, 0, 255);
+    lightRed.setTarget(newVal);
+    if (old != newVal) { publishOne("red", newVal); changed = true; }
   }
   if (current_selection == SEL_ALL || current_selection == SEL_UV) {
-    int old = val_uv;
-    val_uv = constrain(val_uv + amount, 0, 255);
-    if (old != val_uv) { publishOne("uv", val_uv); changed = true; }
+    int old = lightUV.getTarget();
+    int newVal = constrain(old + amount, 0, 255);
+    lightUV.setTarget(newVal);
+    if (old != newVal) { publishOne("uv", newVal); changed = true; }
   }
   if (changed) updateDisplay();
 }
@@ -229,23 +214,26 @@ void adjustBrightness(int amount) {
 void setChannelOff() {
   activateManualMode(); 
   bool changed = false;
+  
   if (current_selection == SEL_ALL || current_selection == SEL_WHITE) {
-    val_white = 0; publishOne("white", val_white); changed = true;
+    lightWhite.setTarget(0); 
+    publishOne("white", 0); 
+    changed = true;
   }
   if (current_selection == SEL_ALL || current_selection == SEL_RED) {
-    val_red = 0; publishOne("red", val_red); changed = true;
+    lightRed.setTarget(0); 
+    publishOne("red", 0); 
+    changed = true;
   }
   if (current_selection == SEL_ALL || current_selection == SEL_UV) {
-    val_uv = 0; publishOne("uv", val_uv); changed = true;
+    lightUV.setTarget(0); 
+    publishOne("uv", 0); 
+    changed = true;
   }
   if (changed) updateDisplay();
 }
 
-void updatePWM() {
-  ledcWrite(CH_WHITE, (int)cur_white);
-  ledcWrite(CH_RED, (int)cur_red);
-  ledcWrite(CH_UV, (int)cur_uv);
-}
+// updatePWM borttagen
 
 void updateDisplay() {
     static long cachedRSSI = 0;
@@ -280,12 +268,14 @@ void updateDisplay() {
     bool wifiC = (WiFi.status() == WL_CONNECTED);
     bool mqttC = client.connected();
 
+    float totalWh = lightWhite.getEnergyUsageWh() + lightRed.getEnergyUsageWh() + lightUV.getEnergyUsageWh();
+
     displayMgr.update(current_selection, current_setting_option, current_language, 
                       manual_mode, powerSaveMode, 
-                      val_white, val_red, val_uv, 
+                      lightWhite.getTarget(), lightRed.getTarget(), lightUV.getTarget(), 
                       viewing_preset, 
                       wifiC, mqttC, 
-                      (int)cachedRSSI, FIRMWARE_VERSION); 
+                      (int)cachedRSSI, FIRMWARE_VERSION, totalWh); 
 }
 
 void publishOne(const char* type, int val) {
@@ -330,23 +320,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (light_type != "") {
     activateManualMode(); 
-    int* targetVal = nullptr;
-    if (light_type == "white") targetVal = &val_white;
-    if (light_type == "red") targetVal = &val_red;
-    if (light_type == "uv") targetVal = &val_uv;
+    LightChannel* targetChannel = nullptr;
+    if (light_type == "white") targetChannel = &lightWhite;
+    else if (light_type == "red") targetChannel = &lightRed;
+    else if (light_type == "uv") targetChannel = &lightUV;
 
-    if (targetVal) {
+    if (targetChannel) {
+      int newVal = targetChannel->getTarget();
+      
       if (doc.containsKey("state")) {
         const char* s = doc["state"];
-        if (strcmp(s, "OFF") == 0) *targetVal = 0;
-        else if (strcmp(s, "ON") == 0 && *targetVal == 0) *targetVal = 255;
+        if (strcmp(s, "OFF") == 0) newVal = 0;
+        else if (strcmp(s, "ON") == 0 && newVal == 0) newVal = 255;
       }
       if (doc.containsKey("brightness")) {
-        *targetVal = doc["brightness"];
+        newVal = doc["brightness"];
       }
-      publishOne(light_type.c_str(), *targetVal);
+      
+      targetChannel->setTarget(newVal);
+      publishOne(light_type.c_str(), newVal);
     }
-    // No direct updatePWM, fading handles it
     updateDisplay(); 
   }
 }
@@ -382,6 +375,32 @@ void sendDiscovery(const char* name, const char* light_type) {
   client.publish(topic, buffer, true);
 }
 
+void sendEnergyDiscovery() {
+  char topic[128];
+  snprintf(topic, sizeof(topic), "homeassistant/sensor/%s_energy/config", "bastun_vaxtljus");
+
+  JsonDocument doc;
+  doc["name"] = "Växtljus Energi Totalt";
+  doc["unique_id"] = "vaxtljus_energy_total";
+  doc["state_topic"] = String(topic_prefix) + "/energy/total";
+  doc["unit_of_measurement"] = "Wh";
+  doc["device_class"] = "energy";
+  doc["state_class"] = "total_increasing";
+  doc["force_update"] = true;
+
+  // Optional: Add device info to group them (if we were doing a full device registry implementation)
+  JsonObject device = doc["device"].to<JsonObject>();
+  device["identifiers"][0] = "vaxtljus_master_v3";
+  device["name"] = "Växtljus Master";
+  device["sw_version"] = FIRMWARE_VERSION;
+  device["model"] = "T-Display S3";
+  device["manufacturer"] = "LilyGo";
+
+  char buffer[512];
+  serializeJson(doc, buffer);
+  client.publish(topic, buffer, true);
+}
+
 void reconnect() {
   if (!client.connected()) {
     String clientId = "ESP32Client-" + String(random(0xffff), HEX);
@@ -389,6 +408,7 @@ void reconnect() {
       sendDiscovery("Växtljus Vit", "white");
       sendDiscovery("Växtljus Röd", "red");
       sendDiscovery("Växtljus UV", "uv");
+      sendEnergyDiscovery(); // Auto-Discovery for Energy Meter
       client.subscribe((String(topic_prefix) + "/+/set").c_str());
     }
   }
@@ -479,16 +499,13 @@ void setup() {
       enterAPMode();
   }
 
-  // PWM Setup (Still needed so lights don't float, but set to 0 or default)
-  ledcSetup(CH_WHITE, PWM_FREQ, PWM_RES);
-  ledcSetup(CH_RED, PWM_FREQ, PWM_RES);
-  ledcSetup(CH_UV, PWM_FREQ, PWM_RES);
-  ledcAttachPin(PIN_WHITE, CH_WHITE);
-  ledcAttachPin(PIN_RED, CH_RED);
-  ledcAttachPin(PIN_UV, CH_UV);
+  // PWM Setup via LightChannel Class
+  lightWhite.begin(PWM_FREQ, PWM_RES);
+  lightRed.begin(PWM_FREQ, PWM_RES);
+  lightUV.begin(PWM_FREQ, PWM_RES);
   
   if (!isAPMode) {
-      updatePWM();
+      // updatePWM() not needed as update() in loop handles it
       client.setServer(mqtt_server, mqtt_port);
       client.setCallback(callback);
       client.setBufferSize(1024);
@@ -511,8 +528,10 @@ void loop() {
   // OTA ska hanteras först
   ArduinoOTA.handle(); 
   
-  // Fade-logiken ska rulla oavsett WiFi
-  handleFading(); 
+  // Fade-logiken & Energi-räkning
+  lightWhite.update();
+  lightRed.update();
+  lightUV.update();
 
   unsigned long now = millis();
   
@@ -538,7 +557,28 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!client.connected()) {
       if (now - lastReconnectAttempt > 15000) { lastReconnectAttempt = now; reconnect(); }
-    } else client.loop();
+    } else {
+        client.loop();
+        
+        static unsigned long lastEnergyPub = 0;
+        if (now - lastEnergyPub > 60000) { // Publish stats every 60s
+             lastEnergyPub = now;
+             float eW = lightWhite.getEnergyUsageWh();
+             float eR = lightRed.getEnergyUsageWh();
+             float eU = lightUV.getEnergyUsageWh();
+             float total = eW + eR + eU;
+             
+             char topic[100];
+             char payload[64];
+             
+             // Total
+             snprintf(topic, sizeof(topic), "%s/energy/total", topic_prefix);
+             snprintf(payload, sizeof(payload), "%.2f", total);
+             client.publish(topic, payload);
+             
+             // Debug/Details? Maybe later if requested.
+        }
+    }
   }
 
   // Resten av loopen (knappar, UI, schema) MÅSTE få köras fritt

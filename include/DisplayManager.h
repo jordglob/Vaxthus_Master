@@ -18,7 +18,7 @@ public:
     // Updated signature: explicit connection flags
     void update(MenuSelection sel, int setOpt, int lang, bool manual, bool eco, 
                 int vWhite, int vRed, int vUv, int activePreset, 
-                bool wifiConnected, bool mqttConnected, int rssi, const char* version);
+                bool wifi, bool mqtt, int rssi, const char* fwVersion, float totalWh);
 
     // EXPLICIT AP MODE SCREEN
     void showAPScreen(); 
@@ -39,6 +39,7 @@ private:
         int rssi;
         int lastMinute; // For header clock
         char versionStr[20]; // NEW: Lagra Loop string
+        float totalWh;
     } state;
 
     bool firstRun = true; // To clear boot msg
@@ -49,7 +50,7 @@ private:
     TFT_eSprite settingsSpr = TFT_eSprite(&tft); // Used for generic content lists now
 
     void drawHeader(bool manual, bool eco, bool wifi, bool mqtt);
-    void drawFooter(int rssi, const char* version);
+    void drawFooter(int rssi, const char* version, float totalWh);
     void drawChannelList(MenuSelection sel, int lang, int vWhite, int vRed, int vUv);
     void drawSettingsMenu(int setOpt, int lang, bool eco);
     void drawQRInfo(int lang, bool isAPMode);

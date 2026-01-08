@@ -36,7 +36,7 @@ enum PlantPreset {
 };
 
 // Global Version Control
-#define FIRMWARE_VERSION "v1.1.0"
+#define FIRMWARE_VERSION "v3.0.0"
 // AP Settings
 #define AP_SSID "Vaxthus-Master"
 #define AP_PASS "vaxthus123"
@@ -46,10 +46,14 @@ constexpr int CH_WHITE = 0;
 constexpr int CH_RED = 1;
 constexpr int CH_UV = 2;
 
-// Shared Global Variables (Defined in main.cpp)
-extern int val_white;
-extern int val_red;
-extern int val_uv;
+#include "LightChannel.h"
+
+// Shared Global Objects (Defined in main.cpp)
+extern LightChannel lightWhite;
+extern LightChannel lightRed;
+extern LightChannel lightUV;
+
 extern bool isAPMode;
+
 
 #endif

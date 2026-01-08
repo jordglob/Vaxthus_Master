@@ -167,7 +167,7 @@ void DisplayManager::showBootQR() {
 
 void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual, bool eco, 
                             int vWhite, int vRed, int vUv, int activePreset, 
-                            bool wifiConnected, bool mqttConnected, int rssi, const char* version) {
+                            bool wifiConnected, bool mqttConnected, int rssi, const char* version, float totalWh) {
     
     // Hämta tid för att se om klockan ändrats
     struct tm timeinfo;
@@ -183,6 +183,7 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     bool rssiChanged = (abs(state.rssi - rssi) > 2);
     bool timeChanged = (state.lastMinute != currentMinute);
     bool loopChanged = (strcmp(state.versionStr, version) != 0);
+    bool energyChanged = (abs(state.totalWh - totalWh) > 0.05f); // 0.05 Wh tolerance
     
     // Other changes that affect generic views (settings, main lists)
     bool genericChanged = false;
@@ -197,7 +198,7 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     if (state.mqtt != mqttConnected) genericChanged = true;
 
     // Determine Global Refresh Needs
-    bool major = (selChanged || langChanged || rssiChanged || timeChanged || genericChanged);
+    bool major = (selChanged || langChanged || rssiChanged || timeChanged || genericChanged || energyChanged);
     bool minor = loopChanged;
 
     if (this->firstRun) { 
@@ -222,6 +223,7 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     state.mqtt = mqttConnected;
     state.rssi = rssi;
     state.lastMinute = currentMinute;
+    state.totalWh = totalWh;
     strncpy(state.versionStr, version, 19); 
     state.versionStr[19] = '\0';
 
@@ -277,7 +279,7 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
         drawChannelList(sel, lang, vWhite, vRed, vUv);
     }
 
-    drawFooter(rssi, version);
+    drawFooter(rssi, version, totalWh);
 }
 
 void DisplayManager::drawHeader(bool manual, bool eco, bool wifi, bool mqtt) {
@@ -335,10 +337,11 @@ void DisplayManager::drawHeader(bool manual, bool eco, bool wifi, bool mqtt) {
     headerSpr.pushSprite(0, 0);
 }
 
-void DisplayManager::drawFooter(int rssi, const char* version) {
+void DisplayManager::drawFooter(int rssi, const char* version, float totalWh) {
     footerSpr.fillSprite(TFT_BLACK);
     footerSpr.drawFastHLine(0, 0, 320, TFT_DARKGREY);
 
+    // Left: RSSI
     footerSpr.setTextDatum(ML_DATUM); 
     footerSpr.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
     footerSpr.drawString("WiFi: ", 5, 12);
@@ -353,6 +356,15 @@ void DisplayManager::drawFooter(int rssi, const char* version) {
         footerSpr.drawString("DISCONNECTED", 40, 12);
     }
 
+    // Center: Energy
+    footerSpr.setTextDatum(MC_DATUM);
+    footerSpr.setTextColor(TFT_YELLOW, TFT_BLACK);
+    char energyStr[20];
+    if (totalWh < 1000) snprintf(energyStr, sizeof(energyStr), "%.1f Wh", totalWh);
+    else snprintf(energyStr, sizeof(energyStr), "%.2f kWh", totalWh / 1000.0);
+    footerSpr.drawString(energyStr, 160, 12);
+
+    // Right: Loop/FW
     footerSpr.setTextDatum(MR_DATUM); 
     footerSpr.setTextColor(TFT_MAGENTA, TFT_BLACK);
     footerSpr.drawString(version, 315, 12);
