@@ -247,25 +247,44 @@ void updatePWM() {
 }
 
 void updateDisplay() {
-    bool wifiC = (WiFi.status() == WL_CONNECTED);
-    bool mqttC = client.connected();
+    static long cachedRSSI = 0;
+    static unsigned long lastRSSI = 0;
     
     // CPU Load / Loop Time estimering
     static unsigned long prev = 0;
+    static unsigned long lastCpuUpdate = 0;
+    static int displayedLoopTime = 0;
+    
     unsigned long now = millis();
     int loopTime = (int)(now - prev);
     prev = now; 
+    
+    // Cache RSSI (Expensive operation!)
+    if (now - lastRSSI > 2000) {
+       if(WiFi.status() == WL_CONNECTED) cachedRSSI = WiFi.RSSI();
+       else cachedRSSI = 0;
+       lastRSSI = now;
+    }
+
+    // Uppdatera bara textsträngen 1 gång per sekund för att inte döda UI-prestanda
+    if (now - lastCpuUpdate > 1000) {
+        displayedLoopTime = loopTime;
+        lastCpuUpdate = now;
+    }
 
     // Använder "v2.0" strängen för att fuska in CPU-load
     char cpuStr[20];
-    snprintf(cpuStr, sizeof(cpuStr), "Loop: %dms", loopTime);
+    snprintf(cpuStr, sizeof(cpuStr), "Loop: %dms", displayedLoopTime);
+
+    bool wifiC = (WiFi.status() == WL_CONNECTED);
+    bool mqttC = client.connected();
 
     displayMgr.update(current_selection, current_setting_option, current_language, 
                       manual_mode, powerSaveMode, 
                       val_white, val_red, val_uv, 
                       viewing_preset, 
                       wifiC, mqttC, 
-                      WiFi.RSSI(), cpuStr); 
+                      (int)cachedRSSI, cpuStr); 
 }
 
 void publishOne(const char* type, int val) {
@@ -375,11 +394,32 @@ void reconnect() {
 }
 
 // --------------------------------------------------------------------------
+// MAIN AP LOOP (ISOLATED)
+// --------------------------------------------------------------------------
+void loopAP() {
+    // Endast WebServer och Display uppdateringar - INGET ANNAT
+    
+    // Hantera knappar för reboot/exit
+    int clickBtm = btnBtm.update();
+    if (clickBtm > 0) {
+        displayMgr.showMessage("Rebooting...");
+        delay(500);
+        ESP.restart();
+    }
+
+    // Uppdatera loop-tiden bara för debug, men rita inte om hela skärmen
+    // Vi litar på att showAPScreen() ritats en gång vid start.
+    
+    delay(10); // Ge tid till WiFi stacken att svara på HTTP requests
+}
+
+// --------------------------------------------------------------------------
 // MAIN
 // --------------------------------------------------------------------------
 
 volatile int virtualClickTop = 0; 
 volatile int virtualClickBtm = 0;
+bool isAPMode = false; // Global flag
 
 void initWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
@@ -429,41 +469,48 @@ void setup() {
 
   if(WiFi.status() == WL_CONNECTED) {
       configTzTime(timezone_info, ntpServer);
+      isAPMode = false;
   }
   else { 
-      // Fallback to AP Mode
-      // Use standard disconnect, not "true" which turns off radio
+      // Fallback to AP Mode -> ENTER ISOLATED STATE
       WiFi.disconnect(); 
       delay(100);
-      WiFi.mode(WIFI_AP_STA); 
+      WiFi.mode(WIFI_AP); // Ren AP mode, ingen STA scanning som stör
       WiFi.softAP("Vaxthus-Master", "vaxthus123");
       
-      // dnsServer.start(53, "*", WiFi.softAPIP()); // REMOVED
-      // dnsActive = true;
+      isAPMode = true; // Flagga för att köra loopAP()
+      displayMgr.showAPScreen(); // Rita skärmen EN GÅNG
   }
 
+  // PWM Setup (Still needed so lights don't float, but set to 0 or default)
   ledcSetup(CH_WHITE, PWM_FREQ, PWM_RES);
   ledcSetup(CH_RED, PWM_FREQ, PWM_RES);
   ledcSetup(CH_UV, PWM_FREQ, PWM_RES);
   ledcAttachPin(PIN_WHITE, CH_WHITE);
   ledcAttachPin(PIN_RED, CH_RED);
   ledcAttachPin(PIN_UV, CH_UV);
-  updatePWM();
-
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-  client.setBufferSize(1024);
-
-  ArduinoOTA.onStart([]() { displayMgr.showMessage("OTA UPDATE..."); });
-  ArduinoOTA.begin();
-
-  // initWebServer(); // Moved to top
   
-  delay(1000);
-  updateDisplay(); 
+  if (!isAPMode) {
+      updatePWM();
+      client.setServer(mqtt_server, mqtt_port);
+      client.setCallback(callback);
+      client.setBufferSize(1024);
+      ArduinoOTA.onStart([]() { displayMgr.showMessage("OTA UPDATE..."); });
+      ArduinoOTA.begin();
+  }
+  
+  delay(100);
+  if (!isAPMode) updateDisplay(); 
 }
 
 void loop() {
+  // ISOLATED AP LOOP TRAP
+  if (isAPMode) {
+      loopAP();
+      return; 
+  }
+
+  // NORMAL LOOP BELOW
   // OTA ska hanteras först
   ArduinoOTA.handle(); 
   

@@ -176,29 +176,37 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
         currentMinute = timeinfo.tm_min;
     }
 
-    // Dirty Check - Rita bara om något ändrats!
-    bool changed = false;
-    if (state.sel != sel) changed = true;
-    if (state.setOpt != setOpt) changed = true;
-    if (state.lang != lang) changed = true;
-    if (state.manual != manual) changed = true;
-    if (state.eco != eco) changed = true;
-    if (state.vWhite != vWhite) changed = true;
-    if (state.vRed != vRed) changed = true;
-    if (state.vUv != vUv) changed = true;
-    if (state.activePreset != activePreset) changed = true; 
-    if (state.lastMinute != currentMinute) changed = true; 
-    if (state.wifi != wifiConnected) changed = true; 
-    if (state.mqtt != mqttConnected) changed = true;
-    if (abs(state.rssi - rssi) > 2) changed = true; 
+    // Dirty Check - Dela upp i Major (Hela skärmen) och Minor (Bara text)
+    // Flag Changes Explicitly
+    bool selChanged = (state.sel != sel);
+    bool langChanged = (state.lang != lang);
+    bool rssiChanged = (abs(state.rssi - rssi) > 2);
+    bool timeChanged = (state.lastMinute != currentMinute);
+    bool loopChanged = (strcmp(state.versionStr, version) != 0);
     
+    // Other changes that affect generic views (settings, main lists)
+    bool genericChanged = false;
+    if (state.setOpt != setOpt) genericChanged = true;
+    if (state.manual != manual) genericChanged = true;
+    if (state.eco != eco) genericChanged = true;
+    if (state.vWhite != vWhite) genericChanged = true;
+    if (state.vRed != vRed) genericChanged = true;
+    if (state.vUv != vUv) genericChanged = true;
+    if (state.activePreset != activePreset) genericChanged = true; 
+    if (state.wifi != wifiConnected) genericChanged = true; 
+    if (state.mqtt != mqttConnected) genericChanged = true;
+
+    // Determine Global Refresh Needs
+    bool major = (selChanged || langChanged || rssiChanged || timeChanged || genericChanged);
+    bool minor = loopChanged;
+
     if (this->firstRun) { 
-        changed = true; 
-        tft.fillScreen(TFT_BLACK); // Clear "Boot Message" or artifacts!
+        major = true; 
+        tft.fillScreen(TFT_BLACK); 
         this->firstRun = false; 
     }
 
-    if (!changed) return; 
+    if (!major && !minor) return; 
 
     // Spara state
     state.sel = sel;
@@ -214,9 +222,11 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     state.mqtt = mqttConnected;
     state.rssi = rssi;
     state.lastMinute = currentMinute;
+    strncpy(state.versionStr, version, 19); 
+    state.versionStr[19] = '\0';
 
     static MenuSelection lastSel = SEL_ALL;
-    bool menuChanged = (sel != lastSel);
+    bool menuChanged = (sel != lastSel); // essentially selChanged but using static var
 
     // FIX: Clear screen aggressively if changing "Views" to avoid artifacts
     // List View Group: ALL, WHITE, RED, UV
@@ -224,8 +234,6 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     bool wasList = (lastSel == SEL_ALL || lastSel == SEL_WHITE || lastSel == SEL_RED || lastSel == SEL_UV);
 
     if (menuChanged) {
-        // If we stay within the List View, do NOT clear (reduces flicker)
-        // If we move to/from any other view (Presets, Settings, Clock, etc), CLEAR everything first.
         if (!(isList && wasList)) {
              tft.fillScreen(TFT_BLACK);
         }
@@ -237,7 +245,18 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
         return; 
     }
     if (sel == SEL_QR) {
-        drawQRInfo(lang);
+        // STRICT OPTIMIZATION: Only redraw QR if necessary (Entry or Lang change)
+        // Ignore RSSI, Time, or background state changes!
+        if (selChanged || langChanged || this->firstRun) {
+             drawQRInfo(lang);
+        }
+
+        
+        // Rita alltid Loop-tiden ovanför knappen
+        tft.setTextColor(TFT_DARKGREY, TFT_WHITE);
+        tft.setTextSize(1);
+        tft.setTextDatum(BC_DATUM);
+        tft.drawString(version, 160, 145); 
         return;
     }
     if (sel == SEL_INFO) {
@@ -498,70 +517,73 @@ void DisplayManager::drawQRInfo(int lang) {
       String qrContent;
       String infoText;
       
-      // Smart QR Logic (Dual)
-      tft.fillScreen(TFT_WHITE);
-    
     // ---------------------------------------------------------
-    // QR 1: WiFi Connect (Top Half)
+    // SIDE-BY-SIDE LAYOUT FOR LANDSCAPE (320x170)
     // ---------------------------------------------------------
+
+    int scale = 3; // 29*3 = 87px size
+    int yCommon = 25;
+
+    // --- LEFT: WiFi Join ---
     String qrWifi = "WIFI:T:WPA;S:Vaxthus-Master;P:vaxthus123;;";
     QRCode qrcode;
     uint8_t qrcodeData[qrcode_getBufferSize(3)];
     qrcode_initText(&qrcode, qrcodeData, 3, 0, qrWifi.c_str());
     
-    int scale = 3; 
-    int x1 = 10; 
-    int y1 = 10;
+    int x1 = 20; 
     
     for (uint8_t y = 0; y < qrcode.size; y++) {
         for (uint8_t x = 0; x < qrcode.size; x++) {
             if (qrcode_getModule(&qrcode, x, y)) {
-                tft.fillRect(x1 + (x*scale), y1 + (y*scale), scale, scale, TFT_BLACK);
+                tft.fillRect(x1 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
             }
         }
     }
     
-    tft.setTextDatum(TL_DATUM);
+    tft.setTextDatum(TC_DATUM); // Center Top
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
     tft.setTextSize(2);
-    tft.drawString("1. JOIN WIFI", x1 + (qrcode.size*scale) + 10, y1 + 10);
+    tft.drawString("1. JOIN WIFI", x1 + (87/2), 5); // Title above
     tft.setTextSize(1);
-    tft.drawString("Vaxthus-Master", x1 + (qrcode.size*scale) + 10, y1 + 35);
+    tft.drawString("Pass: vaxthus123", x1 + (87/2), yCommon + 87 + 5);
 
 
-    // ---------------------------------------------------------
-    // QR 2: Web Server (Bottom Half)
-    // ---------------------------------------------------------
-    // Use the AP IP: 192.168.4.1
+    // --- RIGHT: Web Link ---
     String qrWeb = "http://192.168.4.1";
     QRCode qrcode2;
     uint8_t qrcodeData2[qrcode_getBufferSize(3)];
     qrcode_initText(&qrcode2, qrcodeData2, 3, 0, qrWeb.c_str());
     
-    int y2 = 120; // Lower half
-    int x2 = 10;
+    int x2 = 180;
 
     for (uint8_t y = 0; y < qrcode2.size; y++) {
         for (uint8_t x = 0; x < qrcode2.size; x++) {
             if (qrcode_getModule(&qrcode2, x, y)) {
-                tft.fillRect(x2 + (x*scale), y2 + (y*scale), scale, scale, TFT_BLACK);
+                tft.fillRect(x2 + (x*scale), yCommon + (y*scale), scale, scale, TFT_BLACK);
             }
         }
     }
 
     tft.setTextSize(2);
-    tft.drawString("2. OPEN APP", x2 + (qrcode2.size*scale) + 10, y2 + 10);
+    tft.drawString("2. OPEN APP", x2 + (87/2), 5);
     tft.setTextSize(1);
-    tft.drawString("192.168.4.1", x2 + (qrcode2.size*scale) + 10, y2 + 35);
+    tft.drawString("http://192.168.4.1", x2 + (87/2), yCommon + 87 + 5);
 
-      if(!state.wifi) {
-          tft.setTextColor(TFT_RED, TFT_WHITE);
-          tft.drawString("(AP MODE)", xText, yText + 75);
-      }
+    // --- Footer / Exit ---
+    tft.setTextColor(TFT_RED, TFT_WHITE);
+    tft.setTextSize(2); 
+    tft.setTextDatum(BC_DATUM); // Bottom Center
+    tft.drawString("EXIT >", 160, 165); 
+}
 
-      tft.setTextColor(TFT_RED, TFT_WHITE);
-      tft.setTextSize(2); 
-      tft.drawString("EXIT >", xText, 120); 
+void DisplayManager::showAPScreen() {
+    // Force draw using existing logic but hardcoded for AP
+    drawQRInfo(0); 
+    // Overlay status
+    tft.setTextColor(TFT_RED, TFT_WHITE);
+    tft.setTextSize(2);
+    tft.setTextDatum(BC_DATUM);
+    tft.drawString("AP MODE ACTIVE", 160, 145);
 }
 
 void DisplayManager::drawInfoPage(int lang) {

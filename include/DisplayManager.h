@@ -20,6 +20,9 @@ public:
                 int vWhite, int vRed, int vUv, int activePreset, 
                 bool wifiConnected, bool mqttConnected, int rssi, const char* version);
 
+    // EXPLICIT AP MODE SCREEN
+    void showAPScreen(); 
+
 private:
     struct DisplayState {
         MenuSelection sel;
@@ -35,6 +38,7 @@ private:
         bool mqtt;  // New
         int rssi;
         int lastMinute; // For header clock
+        char versionStr[20]; // NEW: Lagra Loop string
     } state;
 
     bool firstRun = true; // To clear boot msg
