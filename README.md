@@ -54,7 +54,7 @@ Detta projekt är en ESP32-baserad styrenhet för växtbelysning, skriven i C++ 
 
 5.  **OTA (Trådlös Uppdatering):**
     När enheten är installerad i t.ex. en bastu kan du uppdatera den trådlöst.
-    1.  Hitta enhetens IP-adress (syns i routern eller om du printar den till Serial).
+    1.  ipadressen hittas lättast vid QR koden!
     2.  Öppna `platformio.ini` och avkommentera OTA-raderna:
     ```ini
     upload_protocol = espota
