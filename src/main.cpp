@@ -441,6 +441,50 @@ void initWebServer() {
       handleAPSet(request);
   });
 
+  // --- API for Web Simulator (Normal Mode) ---
+  server.on("/api/action", HTTP_GET, [](AsyncWebServerRequest *request){
+      if(request->hasParam("btn") && request->hasParam("type")) {
+          String btn = request->getParam("btn")->value();
+          String type = request->getParam("type")->value();
+          int code = 0;
+          if(type == "click") code = 1;
+          else if(type == "long") code = 3;
+          else if(type == "double") code = 2; // Assuming double click implemented as 2
+          
+          if(code > 0) {
+              if(btn == "top") virtualClickTop = code;
+              if(btn == "btm") virtualClickBtm = code;
+          }
+      }
+      request->send(200, "text/plain", "OK");
+  });
+
+  server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
+      JsonDocument doc;
+      doc["manual"] = manual_mode;
+      doc["sel"] = (int)current_selection;
+      doc["set_opt"] = (int)current_setting_option;
+      doc["lang"] = (int)current_language;
+      doc["eco"] = powerSaveMode;
+      doc["white"] = lightWhite.getTarget(); // Use real values
+      doc["red"] = lightRed.getTarget();
+      doc["uv"] = lightUV.getTarget();
+      doc["wifi"] = (WiFi.status() == WL_CONNECTED);
+      
+      struct tm ti;
+      if (getLocalTime(&ti)) {
+          char timeStr[16];
+          sprintf(timeStr, "%02d:%02d", ti.tm_hour, ti.tm_min);
+          doc["time"] = String(timeStr);
+      } else {
+          doc["time"] = "--:--";
+      }
+
+      String json;
+      serializeJson(doc, json);
+      request->send(200, "application/json", json);
+  });
+
   server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
 
       request->send(200, "text/plain", "Rebooting...");
