@@ -2,6 +2,23 @@
 
 All notable changes to the **Vaxthus Master** project will be documented in this file.
 
+## [v2.1.0] - 2026-01-08 -- "The Isolation Update"
+### Changed
+- **Architecture (Critical):** Implemented a "Trap Loop" architecture. When in AP Mode, the device now enters a completely isolated `loopAP()` cycle. This bypasses all heavy logic (MQTT, NTP sync attempts) that was causing >1500ms latency, making the device lightning fast even without an internet connection.
+- **Refactoring:** 
+  - Moved all AP-specific logic out of `main.cpp` into new files `src/APMode.cpp` and `include/APMode.h`.
+  - Moved HTML generation and Web API handling to `APMode.cpp` to separate UI logic from hardware logic.
+  - Introduced `extern` usage in `Globals.h` to properly share state between modules without circular dependencies.
+
+### Added
+- **AP Dashboard:** The AP Mode landing page is no longer just a "Hello" message. It is now a fully functional dashboard that allows:
+  - Controlling White/Red/Blue light channels individually.
+  - Setting the device time manually (essential since NTP fails offline).
+- **UX:** The QR Code screen on the display now explicitly prints the IP address (e.g., `192.168.4.1`) to help users who cannot scan the code.
+
+### Fixed
+- **Documentation:** Major overhaul of `README.md` including a "State Comparison Table" and professional OTA instructions.
+
 ## [v2.0.3] - 2026-01-08 -- "The Nerd Update"
 ### Added
 - **Captive Portal:** Implemented a DNS Server in AP mode. Connecting to the `Vaxthus-Master` WiFi network will now automatically trigger the "Sign In" prompt on mobile devices, directing users immediately to the web interface.
