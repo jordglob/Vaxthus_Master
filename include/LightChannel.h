@@ -19,6 +19,9 @@ private:
     // Energy Metering
     double _energyTotalWh; // Accumulated Watt-hours
     unsigned long _lastUpdateTime;
+    
+    // Eco Mode
+    bool _ecoMode = false;
 
 public:
     // Constructor
@@ -33,6 +36,7 @@ public:
     // Control
     void setTarget(int target);
     void setDirect(int value); // Skip fading
+    void setEco(bool active) { _ecoMode = active; }
 
     // Getters
     int getTarget() const;

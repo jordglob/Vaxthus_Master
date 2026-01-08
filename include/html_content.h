@@ -34,8 +34,8 @@ const char index_html[] PROGMEM = R"rawliteral(
             display: inline-block;
         }
         .screen {
-            width: 170px; /* T-Display S3 Width */
-            height: 320px; /* T-Display S3 Height */
+            width: 320px; /* T-Display S3 Width Landscape */
+            height: 170px; /* T-Display S3 Height Landscape */
             background: black;
             font-family: 'Courier New', monospace;
             color: white;
@@ -218,29 +218,37 @@ const char index_html[] PROGMEM = R"rawliteral(
                html += rowHtml(false, "Reboot", ">", (opt==3?"red":"grey"), (opt==3));
             } 
             else { // MAIN MENU
-               html += rowHtml((sel==0), "ALLA", "100%", "white");
-               html += rowHtml((sel==1), "VIT", Math.round(data.white/2.55)+"%", "white");
-               html += rowHtml((sel==2), "ROD", Math.round(data.red/2.55)+"%", "red");
-               html += rowHtml((sel==3), "UV ", Math.round(data.uv/2.55)+"%", "magenta");
+               html += rowHtml((sel==0), "ALLA", "100%", "white", false, 0);
+               html += rowHtml((sel==1), "VIT", Math.round(data.white/2.55)+"%", "white", false, 1);
+               html += rowHtml((sel==2), "ROD", Math.round(data.red/2.55)+"%", "red", false, 2);
+               html += rowHtml((sel==3), "UV ", Math.round(data.uv/2.55)+"%", "magenta", false, 3);
                
                html += "<div style='height:20px'></div>";
-               if (sel == 4) html += rowHtml(true, "STALL TID", ">", "yellow");
+               if (sel == 4) html += rowHtml(true, "STALL TID", ">", "yellow", false, 4);
             }
             
             document.getElementById('sim_rows').innerHTML = html;
         }
         
-        function rowHtml(selected, label, val, color, subSelected) {
+        function rowHtml(selected, label, val, color, subSelected, clickId) {
             let prefix = selected ? "> " : (subSelected ? "< " : "&nbsp;&nbsp;");
             let suffix = subSelected ? " >" : "";
-            let style = `color: ${color};`;
+            let style = `color: ${color}; cursor: pointer;`;
             if (selected) style += "font-weight:bold;";
             
-            return `<div class="screen-row" style="${style}">
+            let clickAttr = (typeof clickId !== 'undefined') ? `onclick="selectItem(${clickId})"` : "";
+
+            return `<div class="screen-row" style="${style}" ${clickAttr}>
                 <span class="sel-marker">${prefix}</span>
                 <span style="width:80px; display:inline-block">${label}</span>
                 <span>${val}${suffix}</span>
             </div>`;
+        }
+        
+        function selectItem(id) {
+            console.log("Select:", id);
+            fetch(`/api/select?id=${id}`)
+              .then(() => setTimeout(updateStatus, 150));
         }
         
         // Button Logic

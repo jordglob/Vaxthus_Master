@@ -152,6 +152,10 @@ void handleSchedule() {
     if (millis() - manual_timer_start > MANUAL_TIMEOUT_MS) {
       manual_mode = false;
     } else {
+      // Ensure ECO consistency in manual mode
+      lightWhite.setEco(powerSaveMode);
+      lightRed.setEco(powerSaveMode);
+      lightUV.setEco(powerSaveMode);
       return; 
     }
   }
@@ -175,9 +179,15 @@ void handleSchedule() {
     target_bri = map(current_minutes, TIME_SUNSET_START, TIME_NIGHT_START, 255, 0);
   }
 
-  if (powerSaveMode) target_bri = target_bri / 2;
+  // NOTE: Logic moved to LightChannel::update()!
+  // if (powerSaveMode) target_bri = target_bri / 2;
 
   int target_uv = map(target_bri, 0, 255, 0, UV_MAX_LIMIT); 
+
+  // Push updates
+  lightWhite.setEco(powerSaveMode);
+  lightRed.setEco(powerSaveMode);
+  lightUV.setEco(powerSaveMode);
 
   if (lightWhite.getTarget() != target_bri || lightRed.getTarget() != target_bri) {
      lightWhite.setTarget(target_bri);
@@ -424,10 +434,11 @@ void reconnect() {
 
 volatile int virtualClickTop = 0; 
 volatile int virtualClickBtm = 0;
+volatile int virtualSelection = -1; // New: Direct Selection via Web
 bool isAPMode = false; // Global flag
 
 void initWebServer() {
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  
       if (isAPMode) {
           // Delegate HTML generation to APMode.cpp
           request->send(200, "text/html", getAPPageHTML());
@@ -454,8 +465,63 @@ void initWebServer() {
           if(code > 0) {
               if(btn == "top") virtualClickTop = code;
               if(btn == "btm") virtualClickBtm = code;
+              Serial.printf("API Action: %s type=%s code=%d\n", btn.c_str(), type.c_str(), code);
           }
       }
+      request->send(200, "text/plain", "OK");
+  });
+
+  // --- API for Direct Selection (New Feature for reliability) ---
+  server.on("/api/select", HTTP_GET, [](AsyncWebServerRequest *request){
+      if(request->hasParam("id")) {
+          int id = request->getParam("id")->value().toInt();
+          virtualSelection = id;
+      }
+      request->send(200, "text/plain", "OK");
+  });
+
+  // --- API for Sliders and Controls ---
+  server.on("/api/set", HTTP_GET, [](AsyncWebServerRequest *request){
+      // Case 1: Sliders (Channel + Value)
+      if(request->hasParam("ch") && request->hasParam("val")) {
+          String ch = request->getParam("ch")->value();
+          int val = request->getParam("val")->value().toInt();
+          
+          activateManualMode(); // Any manual override triggers manual mode
+          
+          if(ch == "white") { 
+            lightWhite.setTarget(val); 
+            publishOne("white", val);
+          }
+          if(ch == "red") { 
+            lightRed.setTarget(val); 
+            publishOne("red", val);
+          }
+          if(ch == "uv") { 
+            lightUV.setTarget(val); 
+            publishOne("uv", val);
+          }
+          updateDisplay();
+      }
+      
+      // Case 2: Commands (Auto, Eco, Reboot)
+      if(request->hasParam("cmd")) {
+          String cmd = request->getParam("cmd")->value();
+          if(cmd == "auto") {
+              manual_mode = false;
+              handleSchedule();
+              updateDisplay();
+          }
+          if(cmd == "eco_toggle") {
+              powerSaveMode = !powerSaveMode;
+              handleSchedule();
+              updateDisplay();
+          }
+          if(cmd == "reboot") {
+               ESP.restart();
+          }
+      }
+      
       request->send(200, "text/plain", "OK");
   });
 
@@ -518,6 +584,7 @@ void setup() {
 
   // 1. Init WiFi Stack FIRST (Essential for WebServer to not crash)
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(true); // Re-enable power saving as user requested (300ms is ok)
   WiFi.setHostname("Vaxtljus-Master"); 
   
   // 2. Start WebServer (Now safe because WiFi mode is set)
@@ -628,11 +695,31 @@ void loop() {
   // Resten av loopen (knappar, UI, schema) MÅSTE få köras fritt
   int clickTop = btnTop.update();
   int clickBtm = btnBtm.update();
-  if (virtualClickTop > 0) { clickTop = virtualClickTop; virtualClickTop = 0; }
-  if (virtualClickBtm > 0) { clickBtm = virtualClickBtm; virtualClickBtm = 0; }
+  
+  // Critical section to ensure we don't miss web clicks due to race conditions
+  if (virtualClickTop > 0) { 
+    clickTop = virtualClickTop; 
+    virtualClickTop = 0; 
+    Serial.println("Web Click Top Processed"); 
+  }
+  if (virtualClickBtm > 0) { 
+    clickBtm = virtualClickBtm; 
+    virtualClickBtm = 0; 
+    Serial.println("Web Click Btm Processed"); 
+  }
+
+  // Handle Direct Web Selection
+  if (virtualSelection >= 0) {
+      current_selection = (MenuSelection)virtualSelection;
+      virtualSelection = -1;
+      updateDisplay();
+  }
 
   handleSchedule();
   updateDisplay(); // Manager handles throttling
+  
+  // Throttle loop slightly to allow network stack processing
+  delay(2); 
 
   // --- BUTTON LOGIC ---
   if (clickTop == 1) { 

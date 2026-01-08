@@ -35,13 +35,17 @@ bool LightChannel::update() {
     // 2. Handle Fading
     bool changed = false;
     
-    if (abs(_currentValue - _targetValue) > 0.5f) {
-        if (_currentValue < _targetValue) {
+    // Effective Target considers Eco Mode
+    float effectiveTarget = (float)_targetValue;
+    if (_ecoMode) effectiveTarget *= 0.5f;
+
+    if (abs(_currentValue - effectiveTarget) > 0.5f) {
+        if (_currentValue < effectiveTarget) {
             _currentValue += _fadeSpeed;
-            if (_currentValue > _targetValue) _currentValue = _targetValue;
+            if (_currentValue > effectiveTarget) _currentValue = effectiveTarget;
         } else {
             _currentValue -= _fadeSpeed;
-            if (_currentValue < _targetValue) _currentValue = _targetValue;
+            if (_currentValue < effectiveTarget) _currentValue = effectiveTarget;
         }
         
         // Write to Hardware

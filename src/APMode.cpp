@@ -25,6 +25,11 @@ void loopAP() {
         ESP.restart();
     }
     
+    // UPDATE LIGHTS (So fading works in AP mode too)
+    lightWhite.update();
+    lightRed.update();
+    lightUV.update();
+
     // Ingen Loop-tids beräkning, ingen MQTT, ingen sensor-logik.
     delay(10); 
 }
@@ -48,14 +53,14 @@ String getAPPageHTML() {
       
       // Lights
       html += "<div class='card'><h3>Lights</h3>";
-      html += "White: <span id='vW'>" + String(val_white) + "</span><br>";
-      html += "<input type='range' min='0' max='255' value='" + String(val_white) + "' oninput='u(this,\"vW\")' onchange='s(\"white\",this.value)'><br>";
+      html += "White: <span id='vW'>" + String(lightWhite.getTarget()) + "</span><br>";
+      html += "<input type='range' min='0' max='255' value='" + String(lightWhite.getTarget()) + "' oninput='u(this,\"vW\")' onchange='s(\"white\",this.value)'><br>";
       
-      html += "Red: <span id='vR'>" + String(val_red) + "</span><br>";
-      html += "<input type='range' min='0' max='255' value='" + String(val_red) + "' oninput='u(this,\"vR\")' onchange='s(\"red\",this.value)'><br>";
+      html += "Red: <span id='vR'>" + String(lightRed.getTarget()) + "</span><br>";
+      html += "<input type='range' min='0' max='255' value='" + String(lightRed.getTarget()) + "' oninput='u(this,\"vR\")' onchange='s(\"red\",this.value)'><br>";
       
-      html += "UV: <span id='vU'>" + String(val_uv) + "</span><br>";
-      html += "<input type='range' min='0' max='255' value='" + String(val_uv) + "' oninput='u(this,\"vU\")' onchange='s(\"uv\",this.value)'></div>";
+      html += "UV: <span id='vU'>" + String(lightUV.getTarget()) + "</span><br>";
+      html += "<input type='range' min='0' max='255' value='" + String(lightUV.getTarget()) + "' oninput='u(this,\"vU\")' onchange='s(\"uv\",this.value)'></div>";
       
       // Time
       html += "<div class='card'><h3>Set Time</h3>";
@@ -80,9 +85,9 @@ void handleAPSet(AsyncWebServerRequest *request) {
           String ch = request->getParam("ch")->value();
           int val = request->getParam("val")->value().toInt();
           
-          if(ch == "white") { val_white = val; ledcWrite(CH_WHITE, val); }
-          else if(ch == "red") { val_red = val; ledcWrite(CH_RED, val); }
-          else if(ch == "uv") { val_uv = val; ledcWrite(CH_UV, val); }
+          if(ch == "white") { lightWhite.setTarget(val); }
+          else if(ch == "red") { lightRed.setTarget(val); }
+          else if(ch == "uv") { lightUV.setTarget(val); }
       }
       
       // Handle Time (Format "14:30")

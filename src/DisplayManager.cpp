@@ -209,6 +209,14 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
 
     if (!major && !minor) return; 
 
+    // Determine what parts need redraw BEFORE updating state
+    bool headerNeeded = (timeChanged || state.manual != manual || state.eco != eco || state.wifi != wifiConnected || state.mqtt != mqttConnected || this->firstRun);
+    bool contentNeeded = (selChanged || genericChanged || langChanged || this->firstRun);
+    bool footerNeeded = (rssiChanged || energyChanged || loopChanged || this->firstRun);
+    
+    // If switching menus, we might need to clear or redraw everything to be safe
+    if (selChanged) { headerNeeded = true; contentNeeded = true; footerNeeded = true; }
+
     // Spara state
     state.sel = sel;
     state.setOpt = setOpt;
@@ -228,58 +236,63 @@ void DisplayManager::update(MenuSelection sel, int setOpt, int lang, bool manual
     state.versionStr[19] = '\0';
 
     static MenuSelection lastSel = SEL_ALL;
-    bool menuChanged = (sel != lastSel); // essentially selChanged but using static var
+    bool menuChanged = (sel != lastSel);
 
     // FIX: Clear screen aggressively if changing "Views" to avoid artifacts
-    // List View Group: ALL, WHITE, RED, UV
     bool isList = (sel == SEL_ALL || sel == SEL_WHITE || sel == SEL_RED || sel == SEL_UV);
     bool wasList = (lastSel == SEL_ALL || lastSel == SEL_WHITE || lastSel == SEL_RED || lastSel == SEL_UV);
 
     if (menuChanged) {
         if (!(isList && wasList)) {
              tft.fillScreen(TFT_BLACK);
+             // Force redraw of everything after clear
+             headerNeeded = true; contentNeeded = true; footerNeeded = true;
         }
     }
     lastSel = sel;
 
     if (sel == SEL_SETTINGS) {
-        drawSettingsMenu(setOpt, lang, eco);
+        // Settings menu handles its own conditional redrawing ideally, but for now we let it redraw if contentNeeded
+        if (contentNeeded) drawSettingsMenu(setOpt, lang, eco);
+        // Header/Footer might still be needed
+        if (headerNeeded) drawHeader(manual, eco, wifiConnected, mqttConnected);
+        if (footerNeeded) drawFooter(rssi, version, totalWh);
         return; 
     }
     if (sel == SEL_QR) {
-        // STRICT OPTIMIZATION: Only redraw QR if necessary (Entry or Lang change)
-        // Ignore RSSI, Time, or background state changes!
         if (selChanged || langChanged || this->firstRun) {
              drawQRInfo(lang, false);
         }
-
-        
-        // Rita alltid Loop-tiden ovanför knappen
-        tft.setTextColor(TFT_DARKGREY, TFT_WHITE);
-        tft.setTextSize(1);
-        tft.setTextDatum(BC_DATUM);
-        tft.drawString(version, 160, 145); 
+        // Rita alltid Loop-tiden
+        if (footerNeeded) {
+             tft.setTextColor(TFT_DARKGREY, TFT_WHITE);
+             tft.setTextSize(1);
+             tft.setTextDatum(BC_DATUM);
+             tft.drawString(version, 160, 145); 
+        }
         return;
     }
     if (sel == SEL_INFO) {
-        drawInfoPage(lang);
+        if (contentNeeded) drawInfoPage(lang);
         return;
     }
 
     // Standard Views (Header/Footer + Content)
-    drawHeader(manual, eco, wifiConnected, mqttConnected);
+    if (headerNeeded) drawHeader(manual, eco, wifiConnected, mqttConnected);
     
-    if (sel == SEL_CLOCK) {
-        drawClockMenu(lang);
-    } 
-    else if (sel == SEL_PRESETS) {
-        drawPresetsMenu(activePreset, lang); 
-    }
-    else {
-        drawChannelList(sel, lang, vWhite, vRed, vUv);
+    if (contentNeeded) {
+        if (sel == SEL_CLOCK) {
+            drawClockMenu(lang);
+        } 
+        else if (sel == SEL_PRESETS) {
+            drawPresetsMenu(activePreset, lang); 
+        }
+        else {
+            drawChannelList(sel, lang, vWhite, vRed, vUv);
+        }
     }
 
-    drawFooter(rssi, version, totalWh);
+    if (footerNeeded) drawFooter(rssi, version, totalWh);
 }
 
 void DisplayManager::drawHeader(bool manual, bool eco, bool wifi, bool mqtt) {
