@@ -41,9 +41,9 @@ const int TIME_NIGHT_START = 1320;
 
 const int PWM_FREQ = 5000;
 const int PWM_RES = 8; 
-const int CH_WHITE = 0;
-const int CH_RED = 1;
-const int CH_UV = 2;
+// const int CH_WHITE = 0; // Moved to Globals.h
+// const int CH_RED = 1;   // Moved to Globals.h
+// const int CH_UV = 2;    // Moved to Globals.h
 
 // --------------------------------------------------------------------------
 // OBJEKT
@@ -409,21 +409,20 @@ bool isAPMode = false; // Global flag
 void initWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
       if (isAPMode) {
-          // Simple AP Mode Landing Page
-          String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
-          html += "<style>body{font-family:sans-serif;background:#222;color:#fff;text-align:center;padding:20px;}</style></head>";
-          html += "<body><h1>Vaxthus Master AP</h1>";
-          html += "<p>Mode: Access Point (No WiFi)</p>";
-          html += "<p>Version: " + String(FIRMWARE_VERSION) + "</p>";
-          html += "<button onclick=\"location.href='/reboot'\" style='padding:15px;font-size:20px;'>Reboot to Try WiFi</button>";
-          html += "</body></html>";
-          request->send(200, "text/html", html);
+          // Delegate HTML generation to APMode.cpp
+          request->send(200, "text/html", getAPPageHTML());
       } else {
           request->send_P(200, "text/html", index_html); 
       }
   });
 
+  // Delegate API handling to APMode.cpp
+  server.on("/ap/set", HTTP_GET, [](AsyncWebServerRequest *request){
+      handleAPSet(request);
+  });
+
   server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
+
       request->send(200, "text/plain", "Rebooting...");
       delay(1000);
       ESP.restart();

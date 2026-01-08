@@ -41,4 +41,15 @@ enum PlantPreset {
 #define AP_SSID "Vaxthus-Master"
 #define AP_PASS "vaxthus123"
 
+// PWM Channels
+constexpr int CH_WHITE = 0;
+constexpr int CH_RED = 1;
+constexpr int CH_UV = 2;
+
+// Shared Global Variables (Defined in main.cpp)
+extern int val_white;
+extern int val_red;
+extern int val_uv;
+extern bool isAPMode;
+
 #endif
