@@ -148,6 +148,162 @@ If time sync fails, wait 5 minutes for automatic retry.
 
 See [AI_PRIMER.md](AI_PRIMER.md#4-add-per-channel-sun-simulation) for modification instructions if you want to implement it.
 
+## ⚡ Electricity Price Dimming (Tibber Integration)
+
+### Q: Can the system automatically dim lights when electricity is expensive?
+
+**A:** **YES!** The headless version already supports this via MQTT and Home Assistant, **no code changes needed**.
+
+**How it works:**
+```
+Tibber → Home Assistant → MQTT → Vaxthus Lights
+```
+
+The ESP32 receives MQTT commands from Home Assistant, which monitors electricity prices from Tibber.
+
+### Q: How do I set up Tibber electricity price dimming?
+
+**A:** You need:
+1. **Tibber account** with API access
+2. **Home Assistant** with Tibber integration
+3. **MQTT** configured on Vaxthus (see MQTT setup below)
+
+**Step-by-step:**
+
+**1. Install Tibber in Home Assistant:**
+- Go to Settings → Integrations → Add Integration
+- Search for "Tibber"
+- Enter your Tibber API token
+- You'll get entities like `sensor.tibber_current_price`
+
+**2. Create Home Assistant Automation:**
+
+```yaml
+automation:
+  - alias: "Dim Grow Lights During High Electricity Prices"
+    description: "Reduce light intensity when electricity > 1.5 SEK/kWh"
+    
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.tibber_current_price
+        above: 1.5  # Adjust threshold to your preference
+        
+    action:
+      - service: light.turn_on
+        target:
+          entity_id:
+            - light.grow_light_white
+            - light.grow_light_red
+            - light.grow_light_uv
+        data:
+          brightness: 128  # 50% brightness to save electricity
+          
+  - alias: "Restore Grow Lights When Electricity Price Normal"
+    description: "Return to full brightness when price drops"
+    
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.tibber_current_price
+        below: 1.0  # Normal price
+        
+    action:
+      - service: light.turn_on
+        target:
+          entity_id:
+            - light.grow_light_white
+            - light.grow_light_red
+            - light.grow_light_uv
+        data:
+          brightness: 255  # 100% brightness
+```
+
+**3. Advanced: Multi-Level Dimming Based on Price Tiers:**
+
+```yaml
+automation:
+  - alias: "Dynamic Grow Light Dimming Based on Electricity Price"
+    trigger:
+      - platform: state
+        entity_id: sensor.tibber_current_price
+        
+    action:
+      - choose:
+          # Very High Price (>2.0 SEK/kWh) - 30% brightness
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.tibber_current_price
+                above: 2.0
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id:
+                    - light.grow_light_white
+                    - light.grow_light_red
+                    - light.grow_light_uv
+                data:
+                  brightness: 77  # 30%
+                  
+          # High Price (1.5-2.0 SEK/kWh) - 50% brightness
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.tibber_current_price
+                above: 1.5
+                below: 2.0
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id:
+                    - light.grow_light_white
+                    - light.grow_light_red
+                    - light.grow_light_uv
+                data:
+                  brightness: 128  # 50%
+                  
+          # Medium Price (1.0-1.5 SEK/kWh) - 75% brightness
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.tibber_current_price
+                above: 1.0
+                below: 1.5
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id:
+                    - light.grow_light_white
+                    - light.grow_light_red
+                    - light.grow_light_uv
+                data:
+                  brightness: 191  # 75%
+                  
+        # Default: Low Price (<1.0 SEK/kWh) - 100% brightness
+        default:
+          - service: light.turn_on
+            target:
+              entity_id:
+                - light.grow_light_white
+                - light.grow_light_red
+                - light.grow_light_uv
+            data:
+              brightness: 255  # 100%
+```
+
+### Q: Will price-based dimming interfere with sun simulation?
+
+**A:** Yes, it overrides sun simulation for 40 minutes (manual mode). **For v3.2**, this will be improved:
+- Option to disable manual override when price changes
+- Ability to combine sun simulation + price multiplier
+- Example: 50% price dim × 75% sun simulation = 37.5% brightness
+
+### Q: Can I use other electricity price sources instead of Tibber?
+
+**A:** Yes! Any price sensor in Home Assistant works:
+- **Nordpool** - Common in Scandinavia
+- **Entsoe** - European market prices
+- **Octopus Energy** - UK
+- **Custom sensors** from your electricity provider
+
+Just replace `sensor.tibber_current_price` with your price sensor in the automation.
+
 ## 🏠 Home Assistant & MQTT
 
 ### Q: How do I set up Home Assistant integration?

@@ -119,13 +119,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web response time: <100ms for most requests
 - Memory usage: ~60KB RAM, ~1.2MB Flash
 
-### Future Roadmap (v3.1.0+)
+### Future Roadmap
 
-**Planned for v3.1.0:**
+**v3.2.0 - Planned (Combined Features Branch)**
 - [ ] **Manual mode exit button** - Web interface button to return to auto/sun simulation mode immediately (instead of waiting 40 minutes)
 - [ ] **UV channel limiter** - Automatically limit UV channel to 80% of white channel brightness to extend UV LED lifetime
+- [ ] **Electricity price dimming** - Integration with Tibber/Home Assistant for automatic brightness reduction during high electricity prices
 - [ ] **OTA (Over-The-Air) firmware updates** - Update firmware via web interface without USB cable
 - [ ] Web interface authentication
+
+**v3.1.0 - Headless Improvements:**
+- [ ] Better sun simulation controls
+- [ ] Improved MQTT reliability
+- [ ] Enhanced web interface features
 
 **Future versions:**
 - [ ] Custom sun simulation schedules per channel
