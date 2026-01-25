@@ -17,6 +17,7 @@
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <time.h>
 
 // ============================================================================
 // PIN DEFINITIONS
@@ -31,6 +32,14 @@
 #define PWM_CHANNEL_WHITE 0
 #define PWM_CHANNEL_RED   1
 #define PWM_CHANNEL_UV    2
+
+// Sol-simulering tidsschema
+#define SUNRISE_START_HOUR   6   // 06:00 - Soluppgång börjar
+#define SUNRISE_END_HOUR     10  // 10:00 - Full ljusstyrka
+#define SUNSET_START_HOUR    18  // 18:00 - Skymning börjar
+#define SUNSET_END_HOUR      22  // 22:00 - Mörker
+
+#define MANUAL_OVERRIDE_DURATION 2400000  // 40 minuter i millisekunder
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -47,7 +56,7 @@ String ap_ssid = "Vaxthus_Master";
 String ap_password = "123456789";
 
 // MQTT settings
-String mqtt_server = "";
+String mqtt_server = "mqtt.revolt-energy.org";
 uint16_t mqtt_port = 1883;
 String mqtt_user = "";
 String mqtt_password = "";
@@ -67,6 +76,11 @@ unsigned long lastMqttReconnect = 0;
 unsigned long lastWifiCheck = 0;
 bool ha_discovery_sent = false;
 
+// Sol-simulering variabler
+bool autoMode = true;
+unsigned long manualOverrideStart = 0;
+unsigned long lastSunUpdate = 0;
+
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
@@ -82,6 +96,11 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length);
 void publish_state(const char* channel, uint8_t value);
 void publish_ha_discovery();
 void set_light(uint8_t channel, uint8_t value);
+void set_light_direct(uint8_t white, uint8_t red, uint8_t uv);
+void update_sun_simulation();
+uint8_t calculate_light_level(int hour, int minute);
+void init_time();
+int get_wifi_signal_strength();
 String get_index_html();
 String get_settings_html();
 
@@ -102,6 +121,7 @@ void setup() {
     init_wifi();
     init_webserver();
     init_mqtt();
+    init_time();
 
     Serial.println("Setup complete!");
 }
@@ -113,6 +133,7 @@ void loop() {
     server.handleClient();
     wifi_monitor();
     mqtt_loop();
+    update_sun_simulation();
     delay(10);
 }
 
@@ -125,11 +146,16 @@ void load_settings() {
 
     wifi_ssid = settings.getString("SSID", "");
     wifi_password = settings.getString("PASSWORD", "");
-    mqtt_server = settings.getString("MQTTSERVER", "");
+    mqtt_server = settings.getString("MQTTSERVER", "mqtt.revolt-energy.org");
     mqtt_port = settings.getUInt("MQTTPORT", 1883);
     mqtt_user = settings.getString("MQTTUSER", "");
     mqtt_password = settings.getString("MQTTPASS", "");
     mqtt_enabled = settings.getBool("MQTTENABLED", false);
+
+    mqtt_server = "mqtt.revolt-energy.org";
+    if (mqtt_server != settings.getString("MQTTSERVER", "")) {
+        settings.putString("MQTTSERVER", mqtt_server);
+    }
 
     // Load last light states
     light_white = settings.getUChar("LIGHTWHITE", 0);
@@ -182,6 +208,11 @@ void init_pwm() {
 }
 
 void set_light(uint8_t channel, uint8_t value) {
+    // Aktivera manuell override när användaren justerar ljuset
+    autoMode = false;
+    manualOverrideStart = millis();
+    Serial.println("[Manual] Override activated for 40 minutes");
+    
     switch(channel) {
         case PWM_CHANNEL_WHITE:
             light_white = value;
@@ -209,6 +240,24 @@ void init_wifi() {
     Serial.println("Initializing WiFi...");
 
     WiFi.mode(WIFI_AP_STA);
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+        switch (event) {
+            case ARDUINO_EVENT_WIFI_STA_START:
+                Serial.println("  [WiFi] STA started");
+                break;
+            case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+                Serial.println("  [WiFi] STA connected to AP");
+                break;
+            case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+                Serial.printf("  [WiFi] Got IP: %s\n", WiFi.localIP().toString().c_str());
+                break;
+            case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+                Serial.printf("  [WiFi] Disconnected, reason: %d\n", info.wifi_sta_disconnected.reason);
+                break;
+            default:
+                break;
+        }
+    });
 
     // Start Access Point
     WiFi.softAP(ap_ssid.c_str(), ap_password.c_str());
@@ -220,19 +269,22 @@ void init_wifi() {
         Serial.printf("  Connecting to: %s\n", wifi_ssid.c_str());
         WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
         WiFi.setAutoReconnect(true);
+        WiFi.setSleep(false);
 
         int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+            Serial.printf("  [WiFi] status=%d (attempt %d)\n", WiFi.status(), attempts + 1);
             delay(500);
-            Serial.print(".");
             attempts++;
         }
 
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("\n  Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+            Serial.printf("  Connected! IP: %s\n", WiFi.localIP().toString().c_str());
         } else {
-            Serial.println("\n  Failed to connect to home WiFi");
+            Serial.printf("  Failed to connect to home WiFi (status=%d)\n", WiFi.status());
         }
+    } else {
+        Serial.println("  WiFi SSID not set; skipping STA connect");
     }
 }
 
@@ -241,9 +293,125 @@ void wifi_monitor() {
     lastWifiCheck = millis();
 
     if (wifi_ssid.length() > 0 && WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi disconnected, reconnecting...");
+        Serial.printf("WiFi disconnected (status=%d), reconnecting...\n", WiFi.status());
         WiFi.reconnect();
     }
+}
+
+int get_wifi_signal_strength() {
+    if (WiFi.status() != WL_CONNECTED) return 0;
+    
+    int rssi = WiFi.RSSI();
+    // Konvertera till procent (approximation)
+    // -30 dBm = 100%, -90 dBm = 0%
+    int quality = 2 * (rssi + 100);
+    if (quality > 100) quality = 100;
+    if (quality < 0) quality = 0;
+    return quality;
+}
+
+// ============================================================================
+// NTP TIME & SUN SIMULATION
+// ============================================================================
+void init_time() {
+    Serial.println("Initializing NTP time sync...");
+    // CET = GMT+1, CEST = GMT+2 (sommartid)
+    configTime(3600, 3600, "pool.ntp.org", "time.nist.gov");
+    
+    Serial.print("  Waiting for time sync");
+    time_t now = 0;
+    struct tm timeinfo;
+    int retry = 0;
+    while (now < 1000000000 && retry < 20) {
+        time(&now);
+        Serial.print(".");
+        delay(500);
+        retry++;
+    }
+    Serial.println();
+    
+    if (getLocalTime(&timeinfo)) {
+        Serial.printf("  Time synced: %04d-%02d-%02d %02d:%02d:%02d\n",
+            timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+    } else {
+        Serial.println("  Failed to sync time, will retry later");
+    }
+}
+
+uint8_t calculate_light_level(int hour, int minute) {
+    int totalMinutes = hour * 60 + minute;
+    int sunriseStart = SUNRISE_START_HOUR * 60;
+    int sunriseEnd = SUNRISE_END_HOUR * 60;
+    int sunsetStart = SUNSET_START_HOUR * 60;
+    int sunsetEnd = SUNSET_END_HOUR * 60;
+    
+    if (totalMinutes < sunriseStart || totalMinutes >= sunsetEnd) {
+        return 0;  // Mörker (00:00-06:00 och 22:00-23:59)
+    } else if (totalMinutes >= sunriseEnd && totalMinutes < sunsetStart) {
+        return 255;  // Full ljusstyrka (10:00-18:00)
+    } else if (totalMinutes >= sunriseStart && totalMinutes < sunriseEnd) {
+        // Soluppgång - rampa upp (06:00-10:00)
+        int rampMinutes = sunriseEnd - sunriseStart;  // 240 minuter
+        int elapsed = totalMinutes - sunriseStart;
+        return (uint8_t)((elapsed * 255) / rampMinutes);
+    } else {
+        // Skymning - rampa ner (18:00-22:00)
+        int rampMinutes = sunsetEnd - sunsetStart;  // 240 minuter
+        int elapsed = totalMinutes - sunsetStart;
+        return (uint8_t)(255 - ((elapsed * 255) / rampMinutes));
+    }
+}
+
+void set_light_direct(uint8_t white, uint8_t red, uint8_t uv) {
+    light_white = white;
+    light_red = red;
+    light_uv = uv;
+    
+    ledcWrite(PWM_CHANNEL_WHITE, white);
+    ledcWrite(PWM_CHANNEL_RED, red);
+    ledcWrite(PWM_CHANNEL_UV, uv);
+    
+    // Publicera till MQTT
+    publish_state("white", white);
+    publish_state("red", red);
+    publish_state("uv", uv);
+}
+
+void update_sun_simulation() {
+    // Kör endast varje minut
+    if (millis() - lastSunUpdate < 60000) return;
+    lastSunUpdate = millis();
+    
+    // Kolla om manuell override har löpt ut (40 minuter)
+    if (!autoMode && (millis() - manualOverrideStart > MANUAL_OVERRIDE_DURATION)) {
+        autoMode = true;
+        Serial.println("[Sun Sim] Manual override expired, returning to auto mode");
+    }
+    
+    // Skip om vi är i manuellt läge
+    if (!autoMode) return;
+    
+    // Hämta aktuell tid
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        // Om tiden inte är synkad, försök igen
+        static unsigned long lastTimeSync = 0;
+        if (millis() - lastTimeSync > 300000) {  // Var 5:e minut
+            init_time();
+            lastTimeSync = millis();
+        }
+        return;
+    }
+    
+    // Beräkna ljusnivå baserat på tid
+    uint8_t level = calculate_light_level(timeinfo.tm_hour, timeinfo.tm_min);
+    
+    // Sätt ljuset (samma nivå för alla kanaler)
+    set_light_direct(level, level, level);
+    
+    Serial.printf("[Sun Sim] %02d:%02d → Light: %d%% (Auto mode)\n", 
+        timeinfo.tm_hour, timeinfo.tm_min, (level * 100) / 255);
 }
 
 // ============================================================================
@@ -433,6 +601,8 @@ void init_webserver() {
         doc["uv"] = light_uv;
         doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
         doc["wifi_ip"] = WiFi.localIP().toString();
+        doc["wifi_rssi"] = WiFi.RSSI();
+        doc["wifi_signal_percent"] = get_wifi_signal_strength();
         doc["mqtt_connected"] = mqtt.connected();
 
         String response;
@@ -467,7 +637,7 @@ String get_index_html() {
 </head>
 <body>
     <h1>Vaxthus Master V3</h1>
-    <p class='status'>WiFi: <span id='wifi'>--</span> | MQTT: <span id='mqtt'>--</span></p>
+    <p class='status'>WiFi: <span id='wifi'>--</span> (<span id='signal'>--</span>) | MQTT: <span id='mqtt'>--</span></p>
 
     <div class='card'>
         <h2>Light Control</h2>
@@ -501,6 +671,7 @@ String get_index_html() {
                 .then(r => r.json())
                 .then(d => {
                     document.getElementById('wifi').innerText = d.wifi_connected ? d.wifi_ip : 'Disconnected';
+                    document.getElementById('signal').innerText = d.wifi_connected ? d.wifi_rssi + ' dBm (' + d.wifi_signal_percent + '%)' : '--';
                     document.getElementById('mqtt').innerText = d.mqtt_connected ? 'Connected' : 'Disconnected';
                 });
         }
