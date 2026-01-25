@@ -40,6 +40,7 @@
 #define SUNSET_END_HOUR      22  // 22:00 - Mörker
 
 #define MANUAL_OVERRIDE_DURATION 2400000  // 40 minuter i millisekunder
+#define UV_LIMITER_PERCENTAGE 80  // UV max 80% of white (safety feature)
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -225,6 +226,12 @@ void set_light(uint8_t channel, uint8_t value) {
             publish_state("red", value);
             break;
         case PWM_CHANNEL_UV:
+            // UV Safety Limiter: Max 80% of white brightness
+            uint8_t max_uv = (light_white * UV_LIMITER_PERCENTAGE) / 100;
+            if (value > max_uv) {
+                value = max_uv;
+                Serial.printf("[UV Limiter] Limited UV to %d (80%% of white %d)\n", value, light_white);
+            }
             light_uv = value;
             ledcWrite(PWM_CHANNEL_UV, value);
             publish_state("uv", value);
@@ -604,10 +611,18 @@ void init_webserver() {
         doc["wifi_rssi"] = WiFi.RSSI();
         doc["wifi_signal_percent"] = get_wifi_signal_strength();
         doc["mqtt_connected"] = mqtt.connected();
+        doc["auto_mode"] = autoMode;
 
         String response;
         serializeJson(doc, response);
         server.send(200, "application/json", response);
+    });
+
+    // Exit manual mode (return to auto)
+    server.on("/exitManual", HTTP_GET, []() {
+        autoMode = true;
+        Serial.println("[Manual] User requested return to auto mode");
+        server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"auto\"}");
     });
 
     server.begin();
@@ -632,7 +647,14 @@ String get_index_html() {
         .red { accent-color: #ff4444; }
         .uv { accent-color: #9944ff; }
         .status { font-size: 0.9em; color: #888; }
-        a { color: #4ecca3; }
+        a { color: #4ecca3; text-decoration: none; }
+        .btn { 
+            background: #ff6b35; color: #fff; border: none;
+            padding: 12px 24px; border-radius: 5px; cursor: pointer;
+            font-size: 14px; margin: 10px 0; display: inline-block;
+        }
+        .btn:hover { background: #ff8855; }
+        #autoBtn { display: none; }
     </style>
 </head>
 <body>
@@ -656,6 +678,8 @@ String get_index_html() {
             <div class='slider-label'><span>UV</span><span id='uv_val'>)rawliteral" + String(light_uv) + R"rawliteral(</span></div>
             <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)'>
         </div>
+        
+        <button id='autoBtn' class='btn' onclick='exitManual()'>🌅 Return to Auto Mode</button>
     </div>
 
     <p><a href='/settings'>Settings</a></p>
@@ -666,6 +690,15 @@ String get_index_html() {
             fetch('/setLight?' + channel + '=' + value);
         }
 
+        function exitManual() {
+            fetch('/exitManual')
+                .then(r => r.json())
+                .then(d => {
+                    alert('Returned to automatic sun simulation mode');
+                    updateStatus();
+                });
+        }
+
         function updateStatus() {
             fetch('/status')
                 .then(r => r.json())
@@ -673,6 +706,9 @@ String get_index_html() {
                     document.getElementById('wifi').innerText = d.wifi_connected ? d.wifi_ip : 'Disconnected';
                     document.getElementById('signal').innerText = d.wifi_connected ? d.wifi_rssi + ' dBm (' + d.wifi_signal_percent + '%)' : '--';
                     document.getElementById('mqtt').innerText = d.mqtt_connected ? 'Connected' : 'Disconnected';
+                    
+                    // Show/hide return to auto button
+                    document.getElementById('autoBtn').style.display = d.auto_mode ? 'none' : 'inline-block';
                 });
         }
 
