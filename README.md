@@ -1,6 +1,6 @@
 # Vaxthus Master V3 - Grow Light Controller
 
-![Version](https://img.shields.io/badge/version-3.0.0-brightgreen)
+![Version](https://img.shields.io/badge/version-3.3.0-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32-orange)
 
@@ -8,6 +8,9 @@
 
 ## ✨ Features
 
+- **📡 OTA Updates (v3.3.0)**: Upload firmware via WiFi - never need USB again!
+- **🛡️ UV Safety Limiter (v3.2.0)**: Automatically limits UV to 80% of white brightness
+- **🌅 Manual Mode Exit (v3.2.0)**: Return to auto mode instantly with one click
 - **🌅 Automatic Sun Simulation**: Mimics natural daylight cycles with sunrise (06:00-10:00) and sunset (18:00-22:00) transitions
 - **🎛️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)
 - **📱 Web Interface**: Responsive web dashboard accessible from any device
@@ -89,6 +92,26 @@ After connecting to your home network:
 - The device will display its IP address in the serial monitor
 - Access the web interface at `http://[device-ip]`
 - Control lights manually or let the automatic sun simulation run
+
+### 4. OTA Updates (v3.3.0+)
+
+After the first USB upload, all future updates can be done via WiFi:
+
+```bash
+# Update via WiFi (replace IP with your device's IP)
+pio run -t upload --upload-port 192.168.38.112
+
+# Or using mDNS hostname
+pio run -t upload --upload-port vaxthus-master.local
+```
+
+**OTA Features:**
+- **Automatic light shutoff** during updates (safety)
+- **Password protected** (default: 123456789)
+- **Progress monitoring** in PlatformIO
+- **Rollback on failure** (previous firmware preserved)
+
+**No more USB cables needed!** 🎉
 
 ## 🌞 Sun Simulation Schedule
 
