@@ -1,6 +1,6 @@
 # Vaxthus Master V3 - Grow Light Controller
 
-![Version](https://img.shields.io/badge/version-3.3.0-brightgreen)
+![Version](https://img.shields.io/badge/version-3.4.0-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32-orange)
 
@@ -8,8 +8,11 @@
 
 ## ✨ Features
 
+- **🕐 Real-time Clock Display (v3.4.0)**: Live time display on main page with auto mode status
+- **🎨 Improved Mode Indicators (v3.4.0)**: Clear visual badges for AUTO/MANUAL mode with countdown
+- **📊 Manual Mode Countdown (v3.4.0)**: See exactly how many minutes remain in manual override
 - **📡 OTA Updates (v3.3.0)**: Upload firmware via WiFi - never need USB again!
-- **🛡️ UV Safety Limiter (v3.2.0)**: Automatically limits UV to 80% of white brightness
+- **🛡️ UV LED Protection (v3.4.0)**: UV limited to 80% in auto mode to extend LED lifespan
 - **🌅 Manual Mode Exit (v3.2.0)**: Return to auto mode instantly with one click
 - **🌅 Automatic Sun Simulation**: Mimics natural daylight cycles with sunrise (06:00-10:00) and sunset (18:00-22:00) transitions
 - **🎛️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)

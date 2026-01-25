@@ -5,6 +5,83 @@ All notable changes to the Vaxthus Master V3 project will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-01-25
+
+### Added
+- **Real-time clock display** on main web interface
+  - Shows current time with format "Time: HH:MM:SS"
+  - Updates every 2 seconds via status API
+  - Displays "Time: Not synced" if NTP hasn't synchronized
+- **Improved mode indicators** with visual badges
+  - **AUTO MODE**: Green badge with sun icon when in automatic sun simulation
+  - **MANUAL MODE**: Yellow badge with hand icon when in manual override
+  - Clear visual distinction between operating modes
+- **Manual mode countdown timer**
+  - Shows minutes remaining in manual override mode
+  - Format: "(X min remaining)" next to MANUAL MODE badge
+  - Helps users understand when system will return to auto mode
+- **Enhanced "Return to Auto Mode" button**
+  - More prominent button styling with larger padding
+  - Only visible when in manual mode (auto-hides in auto mode)
+  - Immediate mode switch without page reload
+- **UV LED lifespan protection in auto mode**
+  - UV channel automatically limited to 80% of calculated light level
+  - Only active in automatic sun simulation mode
+  - Manual mode still allows full 0-255 control
+  - Extends UV LED lifetime significantly
+- **Clean English user interface**
+  - All user-facing text converted to English
+  - Proper UTF-8 charset declaration for symbol support
+  - Clear informational text about UV limiter behavior
+- **Improved web interface styling**
+  - Better CSS with enhanced spacing and shadows
+  - Smooth hover effects on buttons
+  - Professional badge design for mode indicators
+  - Improved readability and visual hierarchy
+
+### Changed
+- **Status API enhanced** (`/status` endpoint)
+  - Added `time` field with full timestamp
+  - Added `time_synced` boolean field
+  - Added `manual_minutes_left` for countdown display
+  - Maintains backward compatibility with v3.3.0
+- **Web interface update frequency** increased to 2 seconds (from 5 seconds)
+  - Provides more responsive user feedback
+  - Better real-time experience for mode changes
+- **Sun simulation logging** now includes UV percentage
+  - Serial output shows: "Light: X% | UV: Y% (Auto mode)"
+  - Helps verify UV limiter is working correctly
+
+### Fixed
+- Character encoding issues with emoji symbols in web interface
+- Mode indicator not updating immediately after manual override timeout
+- Status updates not reflecting real-time changes in some browsers
+
+### Technical Details
+- **RAM**: 15.3% (49,972 bytes) - No change from v3.3.0
+- **Flash**: 67.1% (879,381 bytes) - +176 bytes from v3.3.0
+- **Compilation**: SUCCESS ✅
+- **OTA Upload**: Tested and verified on 192.168.38.112
+- **Browser Testing**: Chrome, Edge - all features working
+
+### Development Notes
+```cpp
+// New constants used:
+// (No new constants - used existing framework)
+
+// Modified functions:
+- update_sun_simulation() // Added UV limiter logic
+- get_index_html() // Complete UI redesign
+- /status endpoint // Added time and countdown fields
+```
+
+### Upgrade Notes
+- **Fully backward compatible** with v3.3.0
+- **OTA upgrade** from v3.3.0 works flawlessly
+- **No configuration changes** required
+- **No breaking changes** to MQTT topics or API
+- Settings from v3.3.0 are preserved during upgrade
+
 ## [3.0.0] - 2026-01-25
 
 ### Added

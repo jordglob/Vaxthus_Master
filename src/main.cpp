@@ -34,14 +34,14 @@
 #define PWM_CHANNEL_RED   1
 #define PWM_CHANNEL_UV    2
 
-// Sol-simulering tidsschema
-#define SUNRISE_START_HOUR   6   // 06:00 - Soluppgång börjar
-#define SUNRISE_END_HOUR     10  // 10:00 - Full ljusstyrka
-#define SUNSET_START_HOUR    18  // 18:00 - Skymning börjar
-#define SUNSET_END_HOUR      22  // 22:00 - Mörker
+// Sun simulation time schedule
+#define SUNRISE_START_HOUR   6   // 06:00 - Sunrise starts
+#define SUNRISE_END_HOUR     10  // 10:00 - Full brightness
+#define SUNSET_START_HOUR    18  // 18:00 - Sunset starts
+#define SUNSET_END_HOUR      22  // 22:00 - Darkness
 
-#define MANUAL_OVERRIDE_DURATION 2400000  // 40 minuter i millisekunder
-#define UV_LIMITER_PERCENTAGE 80  // UV max 80% of white (safety feature)
+#define MANUAL_OVERRIDE_DURATION 2400000  // 40 minutes in milliseconds
+#define UV_LIMITER_PERCENTAGE 80  // UV max 80% (extends UV LED lifespan)
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -78,7 +78,7 @@ unsigned long lastMqttReconnect = 0;
 unsigned long lastWifiCheck = 0;
 bool ha_discovery_sent = false;
 
-// Sol-simulering variabler
+// Sun simulation variables
 bool autoMode = true;
 unsigned long manualOverrideStart = 0;
 unsigned long lastSunUpdate = 0;
@@ -213,7 +213,7 @@ void init_pwm() {
 }
 
 void set_light(uint8_t channel, uint8_t value) {
-    // Aktivera manuell override när användaren justerar ljuset
+    // Activate manual override when user adjusts lights
     autoMode = false;
     manualOverrideStart = millis();
     Serial.println("[Manual] Override activated for 40 minutes");
@@ -313,7 +313,7 @@ int get_wifi_signal_strength() {
     if (WiFi.status() != WL_CONNECTED) return 0;
     
     int rssi = WiFi.RSSI();
-    // Konvertera till procent (approximation)
+    // Convert to percent (approximation)
     // -30 dBm = 100%, -90 dBm = 0%
     int quality = 2 * (rssi + 100);
     if (quality > 100) quality = 100;
@@ -414,17 +414,17 @@ uint8_t calculate_light_level(int hour, int minute) {
     int sunsetEnd = SUNSET_END_HOUR * 60;
     
     if (totalMinutes < sunriseStart || totalMinutes >= sunsetEnd) {
-        return 0;  // Mörker (00:00-06:00 och 22:00-23:59)
+        return 0;  // Darkness (00:00-06:00 and 22:00-23:59)
     } else if (totalMinutes >= sunriseEnd && totalMinutes < sunsetStart) {
-        return 255;  // Full ljusstyrka (10:00-18:00)
+        return 255;  // Full brightness (10:00-18:00)
     } else if (totalMinutes >= sunriseStart && totalMinutes < sunriseEnd) {
-        // Soluppgång - rampa upp (06:00-10:00)
-        int rampMinutes = sunriseEnd - sunriseStart;  // 240 minuter
+        // Sunrise - ramp up (06:00-10:00)
+        int rampMinutes = sunriseEnd - sunriseStart;  // 240 minutes
         int elapsed = totalMinutes - sunriseStart;
         return (uint8_t)((elapsed * 255) / rampMinutes);
     } else {
-        // Skymning - rampa ner (18:00-22:00)
-        int rampMinutes = sunsetEnd - sunsetStart;  // 240 minuter
+        // Sunset - ramp down (18:00-22:00)
+        int rampMinutes = sunsetEnd - sunsetStart;  // 240 minutes
         int elapsed = totalMinutes - sunsetStart;
         return (uint8_t)(255 - ((elapsed * 255) / rampMinutes));
     }
@@ -439,46 +439,49 @@ void set_light_direct(uint8_t white, uint8_t red, uint8_t uv) {
     ledcWrite(PWM_CHANNEL_RED, red);
     ledcWrite(PWM_CHANNEL_UV, uv);
     
-    // Publicera till MQTT
+    // Publish to MQTT
     publish_state("white", white);
     publish_state("red", red);
     publish_state("uv", uv);
 }
 
 void update_sun_simulation() {
-    // Kör endast varje minut
+    // Run only once per minute
     if (millis() - lastSunUpdate < 60000) return;
     lastSunUpdate = millis();
     
-    // Kolla om manuell override har löpt ut (40 minuter)
+    // Check if manual override has expired (40 minutes)
     if (!autoMode && (millis() - manualOverrideStart > MANUAL_OVERRIDE_DURATION)) {
         autoMode = true;
         Serial.println("[Sun Sim] Manual override expired, returning to auto mode");
     }
     
-    // Skip om vi är i manuellt läge
+    // Skip if in manual mode
     if (!autoMode) return;
     
-    // Hämta aktuell tid
+    // Get current time
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
-        // Om tiden inte är synkad, försök igen
+        // If time is not synced, try again
         static unsigned long lastTimeSync = 0;
-        if (millis() - lastTimeSync > 300000) {  // Var 5:e minut
+        if (millis() - lastTimeSync > 300000) {  // Every 5 minutes
             init_time();
             lastTimeSync = millis();
         }
         return;
     }
     
-    // Beräkna ljusnivå baserat på tid
+    // Calculate light level based on time
     uint8_t level = calculate_light_level(timeinfo.tm_hour, timeinfo.tm_min);
     
-    // Sätt ljuset (samma nivå för alla kanaler)
-    set_light_direct(level, level, level);
+    // Apply UV limiter in auto mode: UV = 80% to extend LED lifespan
+    uint8_t uv_level = (level * UV_LIMITER_PERCENTAGE) / 100;
     
-    Serial.printf("[Sun Sim] %02d:%02d → Light: %d%% (Auto mode)\n", 
-        timeinfo.tm_hour, timeinfo.tm_min, (level * 100) / 255);
+    // Set lights (white and red at full level, UV at 80%)
+    set_light_direct(level, level, uv_level);
+    
+    Serial.printf("[Sun Sim] %02d:%02d → Light: %d%% | UV: %d%% (Auto mode)\n", 
+        timeinfo.tm_hour, timeinfo.tm_min, (level * 100) / 255, (uv_level * 100) / 255);
 }
 
 // ============================================================================
@@ -672,6 +675,28 @@ void init_webserver() {
         doc["wifi_signal_percent"] = get_wifi_signal_strength();
         doc["mqtt_connected"] = mqtt.connected();
         doc["auto_mode"] = autoMode;
+        
+        // Add current time
+        struct tm timeinfo;
+        if (getLocalTime(&timeinfo)) {
+            char timeStr[20];
+            snprintf(timeStr, sizeof(timeStr), "%04d-%02d-%02d %02d:%02d:%02d",
+                timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+            doc["time"] = String(timeStr);
+            doc["time_synced"] = true;
+        } else {
+            doc["time"] = "Not synced";
+            doc["time_synced"] = false;
+        }
+        
+        // Add manual override countdown if applicable
+        if (!autoMode) {
+            unsigned long elapsed = millis() - manualOverrideStart;
+            unsigned long remaining = MANUAL_OVERRIDE_DURATION > elapsed ? 
+                (MANUAL_OVERRIDE_DURATION - elapsed) / 60000 : 0;
+            doc["manual_minutes_left"] = (int)remaining;
+        }
 
         String response;
         serializeJson(doc, response);
@@ -694,35 +719,50 @@ String get_index_html() {
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <title>Vaxthus Master V3</title>
     <style>
-        body { font-family: Arial; margin: 20px; background: #1a1a2e; color: #eee; }
-        h1 { color: #4ecca3; }
-        .card { background: #16213e; padding: 20px; border-radius: 10px; margin: 10px 0; }
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #4ecca3; margin-bottom: 5px; }
+        .card { background: #16213e; padding: 20px; border-radius: 10px; margin: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         .slider-container { margin: 15px 0; }
-        .slider-label { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        input[type=range] { width: 100%; height: 25px; }
+        .slider-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 500; }
+        input[type=range] { width: 100%; height: 25px; cursor: pointer; }
         .white { accent-color: #fff; }
         .red { accent-color: #ff4444; }
         .uv { accent-color: #9944ff; }
-        .status { font-size: 0.9em; color: #888; }
-        a { color: #4ecca3; text-decoration: none; }
+        .status { font-size: 0.9em; color: #888; margin: 5px 0; }
+        .time-display { font-size: 1.3em; color: #4ecca3; margin: 10px 0; font-weight: bold; }
+        .mode-indicator { 
+            display: inline-block; padding: 8px 16px; border-radius: 20px; 
+            font-size: 0.95em; margin: 10px 5px 10px 0; font-weight: bold;
+        }
+        .mode-auto { background: #28a745; color: #fff; }
+        .mode-manual { background: #ffc107; color: #000; }
+        a { color: #4ecca3; text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
         .btn { 
             background: #ff6b35; color: #fff; border: none;
-            padding: 12px 24px; border-radius: 5px; cursor: pointer;
-            font-size: 14px; margin: 10px 0; display: inline-block;
+            padding: 14px 28px; border-radius: 8px; cursor: pointer;
+            font-size: 16px; margin: 15px 0 5px 0; display: inline-block; font-weight: bold;
         }
-        .btn:hover { background: #ff8855; }
-        #autoBtn { display: none; }
+        .btn:hover { background: #ff8855; transform: translateY(-1px); }
+        .info-text { font-size: 0.85em; color: #aaa; margin-top: 8px; line-height: 1.4; }
     </style>
 </head>
 <body>
     <h1>Vaxthus Master V3</h1>
+    <div class='time-display' id='currentTime'>--:--:--</div>
+    <div>
+        <span class='mode-indicator' id='modeIndicator'>Loading...</span>
+        <span id='manualCountdown' class='info-text'></span>
+    </div>
     <p class='status'>WiFi: <span id='wifi'>--</span> (<span id='signal'>--</span>) | MQTT: <span id='mqtt'>--</span></p>
 
     <div class='card'>
         <h2>Light Control</h2>
+        <p class='info-text'>Moving sliders activates Manual Mode for 40 minutes. UV is limited to 80% in Auto Mode to extend LED lifespan.</p>
 
         <div class='slider-container'>
             <div class='slider-label'><span>White</span><span id='white_val'>)rawliteral" + String(light_white) + R"rawliteral(</span></div>
@@ -739,7 +779,7 @@ String get_index_html() {
             <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)'>
         </div>
         
-        <button id='autoBtn' class='btn' onclick='exitManual()'>🌅 Return to Auto Mode</button>
+        <button id='autoBtn' class='btn' onclick='exitManual()'>Return to Auto Mode</button>
     </div>
 
     <p><a href='/settings'>Settings</a></p>
@@ -754,7 +794,6 @@ String get_index_html() {
             fetch('/exitManual')
                 .then(r => r.json())
                 .then(d => {
-                    alert('Returned to automatic sun simulation mode');
                     updateStatus();
                 });
         }
@@ -763,16 +802,40 @@ String get_index_html() {
             fetch('/status')
                 .then(r => r.json())
                 .then(d => {
+                    // Update WiFi and MQTT status
                     document.getElementById('wifi').innerText = d.wifi_connected ? d.wifi_ip : 'Disconnected';
                     document.getElementById('signal').innerText = d.wifi_connected ? d.wifi_rssi + ' dBm (' + d.wifi_signal_percent + '%)' : '--';
                     document.getElementById('mqtt').innerText = d.mqtt_connected ? 'Connected' : 'Disconnected';
                     
-                    // Show/hide return to auto button
-                    document.getElementById('autoBtn').style.display = d.auto_mode ? 'none' : 'inline-block';
+                    // Update time display
+                    if (d.time_synced) {
+                        let time = d.time.split(' ')[1];
+                        document.getElementById('currentTime').innerText = 'Time: ' + time;
+                    } else {
+                        document.getElementById('currentTime').innerText = 'Time: Not synced';
+                    }
+                    
+                    // Update mode indicator
+                    let modeEl = document.getElementById('modeIndicator');
+                    let countdownEl = document.getElementById('manualCountdown');
+                    
+                    if (d.auto_mode) {
+                        modeEl.className = 'mode-indicator mode-auto';
+                        modeEl.innerText = 'AUTO MODE';
+                        countdownEl.innerText = '';
+                        document.getElementById('autoBtn').style.display = 'none';
+                    } else {
+                        modeEl.className = 'mode-indicator mode-manual';
+                        modeEl.innerText = 'MANUAL MODE';
+                        if (d.manual_minutes_left !== undefined) {
+                            countdownEl.innerText = '(' + d.manual_minutes_left + ' min remaining)';
+                        }
+                        document.getElementById('autoBtn').style.display = 'inline-block';
+                    }
                 });
         }
 
-        setInterval(updateStatus, 5000);
+        setInterval(updateStatus, 2000);
         updateStatus();
     </script>
 </body>
