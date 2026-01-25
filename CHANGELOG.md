@@ -120,8 +120,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory usage: ~60KB RAM, ~1.2MB Flash
 
 ### Future Roadmap (v3.1.0+)
-- [ ] OTA (Over-The-Air) firmware updates
+
+**Planned for v3.1.0:**
+- [ ] **Manual mode exit button** - Web interface button to return to auto/sun simulation mode immediately (instead of waiting 40 minutes)
+- [ ] **UV channel limiter** - Automatically limit UV channel to 80% of white channel brightness to extend UV LED lifetime
+- [ ] **OTA (Over-The-Air) firmware updates** - Update firmware via web interface without USB cable
 - [ ] Web interface authentication
+
+**Future versions:**
 - [ ] Custom sun simulation schedules per channel
 - [ ] Temperature/humidity sensor integration
 - [ ] Historical data logging

@@ -254,14 +254,24 @@ monitor_speed = 115200
 
 ### Q: How do I update the firmware?
 
-**A:** 
+**A:** Currently (v3.0.0), you need to use a USB cable:
+
 ```bash
 cd Vaxthus_Master_V3
 git pull  # Get latest code
-pio run -t upload  # Upload to ESP32
+pio run -t upload  # Upload to ESP32 via USB
 ```
 
-**Note:** OTA (Over-The-Air) updates are planned for version 3.1.0.
+**Note:** OTA (Over-The-Air) updates are **NOT supported** in v3.0.0, but are **planned for v3.1.0**.
+
+### Q: Does it support OTA (Over-The-Air) updates?
+
+**A:** **Not yet.** OTA updates are planned for version 3.1.0, which will allow you to update firmware via the web interface without needing a USB cable.
+
+For now, firmware updates require:
+- USB cable connection
+- PlatformIO installation
+- Running `pio run -t upload`
 
 ### Q: Where can I get help?
 
