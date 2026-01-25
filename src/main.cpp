@@ -17,6 +17,7 @@
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 #include <time.h>
 
 // ============================================================================
@@ -86,6 +87,7 @@ unsigned long lastSunUpdate = 0;
 // FORWARD DECLARATIONS
 // ============================================================================
 void init_wifi();
+void init_ota();
 void init_mqtt();
 void init_webserver();
 void init_pwm();
@@ -120,6 +122,7 @@ void setup() {
     load_settings();
     init_pwm();
     init_wifi();
+    init_ota();
     init_webserver();
     init_mqtt();
     init_time();
@@ -131,6 +134,7 @@ void setup() {
 // MAIN LOOP
 // ============================================================================
 void loop() {
+    ArduinoOTA.handle();
     server.handleClient();
     wifi_monitor();
     mqtt_loop();
@@ -315,6 +319,62 @@ int get_wifi_signal_strength() {
     if (quality > 100) quality = 100;
     if (quality < 0) quality = 0;
     return quality;
+}
+
+// ============================================================================
+// OTA (Over-The-Air Updates - like Battery-Emulator)
+// ============================================================================
+void init_ota() {
+    // Only initialize OTA if WiFi is connected
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("OTA not initialized - WiFi not connected");
+        return;
+    }
+
+    Serial.println("Initializing OTA updates...");
+    
+    // Set hostname for easier identification
+    ArduinoOTA.setHostname("vaxthus-master");
+    
+    // Set password (same as AP for simplicity)
+    ArduinoOTA.setPassword(ap_password.c_str());
+    
+    // Set port (default 3232, but explicit is better)
+    ArduinoOTA.setPort(3232);
+    
+    // Callbacks for OTA events
+    ArduinoOTA.onStart([]() {
+        String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
+        Serial.println("\n[OTA] Starting update: " + type);
+        // Turn off lights during update (safety)
+        ledcWrite(PWM_CHANNEL_WHITE, 0);
+        ledcWrite(PWM_CHANNEL_RED, 0);
+        ledcWrite(PWM_CHANNEL_UV, 0);
+    });
+    
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\n[OTA] Update complete!");
+    });
+    
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("[OTA] Progress: %u%% (%u/%u)\r", (progress * 100) / total, progress, total);
+    });
+    
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("\n[OTA] Error[%u]: ", error);
+        switch(error) {
+            case OTA_AUTH_ERROR: Serial.println("Auth Failed"); break;
+            case OTA_BEGIN_ERROR: Serial.println("Begin Failed"); break;
+            case OTA_CONNECT_ERROR: Serial.println("Connect Failed"); break;
+            case OTA_RECEIVE_ERROR: Serial.println("Receive Failed"); break;
+            case OTA_END_ERROR: Serial.println("End Failed"); break;
+            default: Serial.println("Unknown Error"); break;
+        }
+    });
+    
+    ArduinoOTA.begin();
+    Serial.printf("  OTA Ready! Hostname: vaxthus-master\n");
+    Serial.printf("  Upload via: %s:3232\n", WiFi.localIP().toString().c_str());
 }
 
 // ============================================================================
