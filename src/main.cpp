@@ -82,6 +82,7 @@ bool ha_discovery_sent = false;
 bool autoMode = true;
 unsigned long manualOverrideStart = 0;
 unsigned long lastSunUpdate = 0;
+bool forceSunUpdate = false;  // Force immediate sun simulation update
 
 // ============================================================================
 // FORWARD DECLARATIONS
@@ -446,8 +447,9 @@ void set_light_direct(uint8_t white, uint8_t red, uint8_t uv) {
 }
 
 void update_sun_simulation() {
-    // Run only once per minute
-    if (millis() - lastSunUpdate < 60000) return;
+    // Run only once per minute, unless forced
+    if (!forceSunUpdate && (millis() - lastSunUpdate < 60000)) return;
+    forceSunUpdate = false;  // Reset flag
     lastSunUpdate = millis();
     
     // Check if manual override has expired (40 minutes)
@@ -706,7 +708,8 @@ void init_webserver() {
     // Exit manual mode (return to auto)
     server.on("/exitManual", HTTP_GET, []() {
         autoMode = true;
-        Serial.println("[Manual] User requested return to auto mode");
+        forceSunUpdate = true;  // Force immediate update
+        Serial.println("[Manual] User requested return to auto mode - forcing immediate update");
         server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"auto\"}");
     });
 
