@@ -18,6 +18,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
+#include <Update.h>
 #include <time.h>
 
 // ============================================================================
@@ -69,6 +70,11 @@ uint8_t light_white = 0;
 uint8_t light_red = 0;
 uint8_t light_uv = 0;
 
+// Max brightness for Auto Mode (Spectrum control)
+uint8_t max_white = 255;
+uint8_t max_red = 255;
+uint8_t max_uv = 255;
+
 // MQTT topics
 const char* TOPIC_BASE = "bastun/vaxtljus";
 const char* HA_DISCOVERY_PREFIX = "homeassistant";
@@ -106,6 +112,7 @@ void init_time();
 int get_wifi_signal_strength();
 String get_index_html();
 String get_settings_html();
+String get_update_html();
 
 // ============================================================================
 // SETUP
@@ -167,6 +174,11 @@ void load_settings() {
     light_red = settings.getUChar("LIGHTRED", 0);
     light_uv = settings.getUChar("LIGHTUV", 0);
 
+    // Load max brightness settings
+    max_white = settings.getUChar("MAXWHITE", 255);
+    max_red = settings.getUChar("MAXRED", 255);
+    max_uv = settings.getUChar("MAXUV", 255);
+
     Serial.printf("  WiFi SSID: %s\n", wifi_ssid.c_str());
     Serial.printf("  MQTT Server: %s:%d\n", mqtt_server.c_str(), mqtt_port);
     Serial.printf("  MQTT Enabled: %s\n", mqtt_enabled ? "Yes" : "No");
@@ -181,6 +193,9 @@ void save_settings() {
     settings.putString("MQTTUSER", mqtt_user);
     settings.putString("MQTTPASS", mqtt_password);
     settings.putBool("MQTTENABLED", mqtt_enabled);
+    settings.putUChar("MAXWHITE", max_white);
+    settings.putUChar("MAXRED", max_red);
+    settings.putUChar("MAXUV", max_uv);
     Serial.println("Settings saved!");
 }
 
@@ -230,12 +245,7 @@ void set_light(uint8_t channel, uint8_t value) {
             publish_state("red", value);
             break;
         case PWM_CHANNEL_UV:
-            // UV Safety Limiter: Max 80% of white brightness
-            uint8_t max_uv = (light_white * UV_LIMITER_PERCENTAGE) / 100;
-            if (value > max_uv) {
-                value = max_uv;
-                Serial.printf("[UV Limiter] Limited UV to %d (80%% of white %d)\n", value, light_white);
-            }
+            // UV Safety Limiter only active in Auto Mode
             light_uv = value;
             ledcWrite(PWM_CHANNEL_UV, value);
             publish_state("uv", value);
@@ -474,11 +484,21 @@ void update_sun_simulation() {
     // Beräkna ljusnivå baserat på tid
     uint8_t level = calculate_light_level(timeinfo.tm_hour, timeinfo.tm_min);
     
-    // Sätt ljuset (samma nivå för alla kanaler)
-    set_light_direct(level, level, level);
+    // Scale based on max brightness settings (Spectrum Control)
+    uint8_t w = (uint8_t)((level * max_white) / 255);
+    uint8_t r = (uint8_t)((level * max_red) / 255);
+    uint8_t uv = (uint8_t)((level * max_uv) / 255);
+
+    // Apply UV Limiter in Auto Mode (Max 80% of White)
+    uint8_t limit_uv = (w * UV_LIMITER_PERCENTAGE) / 100;
+    if (uv > limit_uv) {
+        uv = limit_uv;
+    }
+
+    set_light_direct(w, r, uv);
     
-    Serial.printf("[Sun Sim] %02d:%02d → Light: %d%% (Auto mode)\n", 
-        timeinfo.tm_hour, timeinfo.tm_min, (level * 100) / 255);
+    Serial.printf("[Sun Sim] %02d:%02d → Level: %d%% | W:%d R:%d UV:%d\n", 
+        timeinfo.tm_hour, timeinfo.tm_min, (level * 100) / 255, w, r, uv);
 }
 
 // ============================================================================
@@ -602,7 +622,7 @@ void publish_ha_discovery() {
         device["name"] = "Vaxthus Master V3";
         device["model"] = "Grow Light Controller";
         device["manufacturer"] = "DIY";
-        device["sw_version"] = "3.0.0";
+        device["sw_version"] = "3.0.2";
 
         String topic = String(HA_DISCOVERY_PREFIX) + "/light/vaxthus_" + channels[i] + "/config";
         String payload;
@@ -638,6 +658,10 @@ void init_webserver() {
         mqtt_user = server.arg("mqtt_user");
         mqtt_password = server.arg("mqtt_pass");
         mqtt_enabled = server.hasArg("mqtt_enabled");
+
+        if (server.hasArg("max_white")) max_white = server.arg("max_white").toInt();
+        if (server.hasArg("max_red")) max_red = server.arg("max_red").toInt();
+        if (server.hasArg("max_uv")) max_uv = server.arg("max_uv").toInt();
 
         save_settings();
 
@@ -683,6 +707,34 @@ void init_webserver() {
         autoMode = true;
         Serial.println("[Manual] User requested return to auto mode");
         server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"auto\"}");
+    });
+
+    // OTA Web Update
+    server.on("/update", HTTP_GET, []() {
+        server.send(200, "text/html", get_update_html());
+    });
+
+    server.on("/update", HTTP_POST, []() {
+        server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+        ESP.restart();
+    }, []() {
+        HTTPUpload& upload = server.upload();
+        if (upload.status == UPLOAD_FILE_START) {
+            Serial.printf("Update: %s\n", upload.filename.c_str());
+            if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+                Update.printError(Serial);
+            }
+        } else if (upload.status == UPLOAD_FILE_WRITE) {
+            if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                Update.printError(Serial);
+            }
+        } else if (upload.status == UPLOAD_FILE_END) {
+            if (Update.end(true)) {
+                Serial.printf("Update Success: %u bytes\nRebooting...\n", upload.totalSize);
+            } else {
+                Update.printError(Serial);
+            }
+        }
     });
 
     server.begin();
@@ -742,9 +794,18 @@ String get_index_html() {
         <button id='autoBtn' class='btn' onclick='exitManual()'>🌅 Return to Auto Mode</button>
     </div>
 
+    <div class='card'>
+        <h3>System Status</h3>
+        <p><b>Readback Values:</b></p>
+        <p>White: <span id='rb_w'>--</span> | Red: <span id='rb_r'>--</span> | UV: <span id='rb_uv'>--</span></p>
+        <p style='font-size:0.9em; color:#aaa; margin-top:10px'>Last updated: <span id='last_update'>Never</span></p>
+    </div>
+
     <p><a href='/settings'>Settings</a></p>
 
     <script>
+        var lastUpdateTime = 0;
+
         function setLight(channel, value) {
             document.getElementById(channel + '_val').innerText = value;
             fetch('/setLight?' + channel + '=' + value);
@@ -769,10 +830,32 @@ String get_index_html() {
                     
                     // Show/hide return to auto button
                     document.getElementById('autoBtn').style.display = d.auto_mode ? 'none' : 'inline-block';
+
+                    // Update sliders if not currently being dragged
+                    ['white', 'red', 'uv'].forEach(c => {
+                        if (document.activeElement.id !== c) {
+                            document.getElementById(c).value = d[c];
+                            document.getElementById(c + '_val').innerText = d[c];
+                        }
+                    });
+
+                    // Update Readback
+                    document.getElementById('rb_w').innerText = d.white;
+                    document.getElementById('rb_r').innerText = d.red;
+                    document.getElementById('rb_uv').innerText = d.uv;
+
+                    lastUpdateTime = Date.now();
                 });
         }
 
+        function updateTimer() {
+            if (lastUpdateTime === 0) return;
+            var seconds = Math.floor((Date.now() - lastUpdateTime) / 1000);
+            document.getElementById('last_update').innerText = seconds + 's ago';
+        }
+
         setInterval(updateStatus, 5000);
+        setInterval(updateTimer, 1000);
         updateStatus();
     </script>
 </body>
@@ -810,6 +893,16 @@ String get_settings_html() {
     <h1>Settings</h1>
     <form action='/saveSettings' method='POST'>
         <div class='card'>
+            <h2>Spectrum Control (Auto Mode)</h2>
+            <label>Max White (0-255):</label>
+            <input type='number' name='max_white' min='0' max='255' value=')rawliteral" + String(max_white) + R"rawliteral('>
+            <label>Max Red (0-255):</label>
+            <input type='number' name='max_red' min='0' max='255' value=')rawliteral" + String(max_red) + R"rawliteral('>
+            <label>Max UV (0-255):</label>
+            <input type='number' name='max_uv' min='0' max='255' value=')rawliteral" + String(max_uv) + R"rawliteral('>
+        </div>
+
+        <div class='card'>
             <h2>WiFi</h2>
             <label>SSID:</label>
             <input type='text' name='ssid' value=')rawliteral" + wifi_ssid + R"rawliteral('>
@@ -832,7 +925,44 @@ String get_settings_html() {
 
         <button type='submit'>Save & Reboot</button>
     </form>
-    <p><a href='/'>Back to Dashboard</a></p>
+    <p><a href='/'>Back to Dashboard</a> | <a href='/update'>Firmware Update</a></p>
+</body>
+</html>
+)rawliteral";
+    return html;
+}
+
+String get_update_html() {
+    String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>Update Firmware - Vaxthus Master</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #4ecca3; }
+        .card { background: #16213e; padding: 20px; border-radius: 10px; margin: 10px 0; }
+        input[type=file] { margin: 10px 0; color: #eee; }
+        button {
+            background: #ff6b35; color: #fff; border: none;
+            padding: 15px 30px; border-radius: 5px; cursor: pointer;
+            font-size: 16px; margin-top: 20px; width: 100%;
+        }
+        button:hover { background: #ff8855; }
+        a { color: #4ecca3; }
+    </style>
+</head>
+<body>
+    <h1>Update Firmware</h1>
+    <div class='card'>
+        <form method='POST' action='/update' enctype='multipart/form-data'>
+            <p>Select firmware file (.bin):</p>
+            <input type='file' name='update' accept='.bin'>
+            <button type='submit'>Update Firmware</button>
+        </form>
+    </div>
+    <p><a href='/settings'>Back to Settings</a></p>
 </body>
 </html>
 )rawliteral";

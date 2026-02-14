@@ -1,6 +1,6 @@
 # Vaxthus Master V3 - Grow Light Controller
 
-![Version](https://img.shields.io/badge/version-3.0.0-brightgreen)
+![Version](https://img.shields.io/badge/version-3.0.2-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32-orange)
 
@@ -9,8 +9,11 @@
 ## ✨ Features
 
 - **🌅 Automatic Sun Simulation**: Mimics natural daylight cycles with sunrise (06:00-10:00) and sunset (18:00-22:00) transitions
-- **🎛️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)
-- **📱 Web Interface**: Responsive web dashboard accessible from any device
+- **🎨 Spectrum Control**: Configure max brightness per channel to maintain custom color ratios during sun simulation
+- **🛡️ UV Safety Limiter**: Automatically limits UV brightness to 80% of White channel during sun simulation (Auto Mode) to prevent plant burn
+- **️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)
+- **� Web Interface**: Responsive web dashboard with real-time feedback and connection status
+- **�📡 Web-based OTA**: Update firmware directly from the browser without USB
 - **🏠 Home Assistant Integration**: MQTT auto-discovery for seamless smart home integration
 - **⚙️ Manual Override**: 40-minute manual control before returning to automatic mode
 - **🔧 Easy Configuration**: Web-based settings for WiFi and MQTT
@@ -142,15 +145,17 @@ Three light entities will appear:
 ## 📋 Web Interface Features
 
 ### Main Dashboard
-- Real-time light control sliders for all three channels
-- WiFi connection status and signal strength
-- MQTT connection indicator
+- Real-time light control sliders with instant feedback
+- **Readback Values**: Displays exact current brightness for verification
+- **Update Timer**: Shows time since last data refresh
+- WiFi/MQTT connection status and signal strength
 - Responsive design for mobile and desktop
 
 ### Settings Page
+- **Spectrum Control**: Set "Max Brightness" for White, Red, and UV channels (Auto Mode scales 0-Max)
 - WiFi SSID and password configuration
 - MQTT server, port, and credentials
-- Enable/disable MQTT integration
+- Link to **Firmware Update** page
 - Save & reboot functionality
 
 ## 🔧 Advanced Configuration

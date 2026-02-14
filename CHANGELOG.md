@@ -5,6 +5,24 @@ All notable changes to the Vaxthus Master V3 project will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-02-14
+
+### Fixed
+- **UV Limiter**: Fixed issue where UV brightness was limited to 80% of White brightness even in Manual Mode. Now the limiter is only active during Auto Mode (Sun Simulation).
+
+## [3.0.1] - 2026-02-14
+
+### Added
+- **Web-based OTA (Over-The-Air) firmware updates** via `/update` endpoint
+- Firmware update page linked from Settings
+- **Spectrum Control (Auto Mode)**: Configurable "Max Brightness" for each channel (White, Red, UV) in Settings to allow custom spectrums during sun simulation
+- **UI Improvements**: Added "Readback Values" and "Last Updated" timer to the main dashboard for better system visibility
+- **Safety**: Applied UV Limiter (Max 80% of White brightness) to Auto Mode logic
+
+### Fixed
+- **Web interface sliders** now update in real-time to reflect actual light values (e.g. during sun simulation or MQTT updates)
+- Simplified JavaScript logic for UI updates
+
 ## [3.0.0] - 2026-01-25
 
 ### Added
@@ -122,9 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Future Roadmap (v3.1.0+)
 
 **Planned for v3.1.0:**
-- [ ] **Manual mode exit button** - Web interface button to return to auto/sun simulation mode immediately (instead of waiting 40 minutes)
-- [ ] **UV channel limiter** - Automatically limit UV channel to 80% of white channel brightness to extend UV LED lifetime
-- [ ] **OTA (Over-The-Air) firmware updates** - Update firmware via web interface without USB cable
+- [x] **Manual mode exit button** - Implemented in v3.0.0
+- [x] **UV channel limiter** - Implemented in v3.0.0
+- [x] **OTA (Over-The-Air) firmware updates** - Implemented in v3.0.1
 - [ ] Web interface authentication
 
 **Future versions:**
