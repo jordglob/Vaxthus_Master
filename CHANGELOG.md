@@ -5,6 +5,17 @@ All notable changes to the Vaxthus Master V3 project will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2026-02-17
+
+### Added
+- **Countdown Timer**: Added visual countdown in the "Return to Auto Mode" button when manual override is active.
+- **Percentage Display**: Sliders now show 0-100% values for easier reading (readback remains 0-255).
+
+### Fixed
+- **Instant Auto Return**: Eliminating the up-to-60-second delay when returning to auto mode.
+- **UI Polishing**: Fixed button text encoding issues and removed the intrusive popup alert.
+- **OTA Configuration**: Updated `platformio.ini` to support direct wireless uploads.
+
 ## [3.0.2] - 2026-02-14
 
 ### Fixed

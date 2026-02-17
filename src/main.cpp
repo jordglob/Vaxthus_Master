@@ -696,6 +696,15 @@ void init_webserver() {
         doc["wifi_signal_percent"] = get_wifi_signal_strength();
         doc["mqtt_connected"] = mqtt.connected();
         doc["auto_mode"] = autoMode;
+        
+        // Calculate remaining manual time
+        long remaining = 0;
+        if (!autoMode) {
+            long elapsed = millis() - manualOverrideStart;
+            remaining = (MANUAL_OVERRIDE_DURATION - elapsed) / 1000;
+            if (remaining < 0) remaining = 0;
+        }
+        doc["manual_remaining"] = remaining;
 
         String response;
         serializeJson(doc, response);
@@ -705,6 +714,8 @@ void init_webserver() {
     // Exit manual mode (return to auto)
     server.on("/exitManual", HTTP_GET, []() {
         autoMode = true;
+        lastSunUpdate = 0; // Force immediate update
+        update_sun_simulation();
         Serial.println("[Manual] User requested return to auto mode");
         server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"auto\"}");
     });
@@ -746,6 +757,7 @@ String get_index_html() {
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <title>Vaxthus Master V3</title>
     <style>
@@ -777,21 +789,21 @@ String get_index_html() {
         <h2>Light Control</h2>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>White</span><span id='white_val'>)rawliteral" + String(light_white) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_white) + R"rawliteral(' class='white' id='white' onchange='setLight("white", this.value)'>
+            <div class='slider-label'><span>White</span><span id='white_val'>)rawliteral" + String((int)((light_white / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_white) + R"rawliteral(' class='white' id='white' onchange='setLight("white", this.value)' oninput='updateLabel("white", this.value)'>
         </div>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>Red</span><span id='red_val'>)rawliteral" + String(light_red) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_red) + R"rawliteral(' class='red' id='red' onchange='setLight("red", this.value)'>
+            <div class='slider-label'><span>Red</span><span id='red_val'>)rawliteral" + String((int)((light_red / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_red) + R"rawliteral(' class='red' id='red' onchange='setLight("red", this.value)' oninput='updateLabel("red", this.value)'>
         </div>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>UV</span><span id='uv_val'>)rawliteral" + String(light_uv) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)'>
+            <div class='slider-label'><span>UV</span><span id='uv_val'>)rawliteral" + String((int)((light_uv / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)' oninput='updateLabel("uv", this.value)'>
         </div>
         
-        <button id='autoBtn' class='btn' onclick='exitManual()'>🌅 Return to Auto Mode</button>
+        <button id='autoBtn' class='btn' onclick='exitManual()'>&#127749; Return to Auto Mode <span id='autoTimer' style='font-size:0.8em; opacity:0.8'></span></button>
     </div>
 
     <div class='card'>
@@ -805,9 +817,18 @@ String get_index_html() {
 
     <script>
         var lastUpdateTime = 0;
+        var manualRemaining = 0;
+
+        function toPercent(val) {
+            return Math.round((val / 255) * 100) + '%';
+        }
+
+        function updateLabel(channel, value) {
+            document.getElementById(channel + '_val').innerText = toPercent(value);
+        }
 
         function setLight(channel, value) {
-            document.getElementById(channel + '_val').innerText = value;
+            updateLabel(channel, value);
             fetch('/setLight?' + channel + '=' + value);
         }
 
@@ -815,7 +836,6 @@ String get_index_html() {
             fetch('/exitManual')
                 .then(r => r.json())
                 .then(d => {
-                    alert('Returned to automatic sun simulation mode');
                     updateStatus();
                 });
         }
@@ -830,12 +850,18 @@ String get_index_html() {
                     
                     // Show/hide return to auto button
                     document.getElementById('autoBtn').style.display = d.auto_mode ? 'none' : 'inline-block';
+                    
+                    // Update manual remaining
+                    if (d.manual_remaining !== undefined) {
+                        manualRemaining = d.manual_remaining;
+                        updateCountdownDisplay();
+                    }
 
                     // Update sliders if not currently being dragged
                     ['white', 'red', 'uv'].forEach(c => {
                         if (document.activeElement.id !== c) {
                             document.getElementById(c).value = d[c];
-                            document.getElementById(c + '_val').innerText = d[c];
+                            document.getElementById(c + '_val').innerText = toPercent(d[c]);
                         }
                     });
 
@@ -847,11 +873,25 @@ String get_index_html() {
                     lastUpdateTime = Date.now();
                 });
         }
+        
+        function updateCountdownDisplay() {
+            var min = Math.floor(manualRemaining / 60);
+            var sec = manualRemaining % 60;
+            var text = '(' + min + ':' + (sec < 10 ? '0' : '') + sec + ')';
+            var el = document.getElementById('autoTimer');
+            if(el) el.innerText = text;
+        }
 
         function updateTimer() {
             if (lastUpdateTime === 0) return;
             var seconds = Math.floor((Date.now() - lastUpdateTime) / 1000);
             document.getElementById('last_update').innerText = seconds + 's ago';
+            
+            // Local decrement
+            if (manualRemaining > 0) {
+                manualRemaining--;
+                updateCountdownDisplay();
+            }
         }
 
         setInterval(updateStatus, 5000);
