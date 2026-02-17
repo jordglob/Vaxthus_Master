@@ -5,6 +5,16 @@ All notable changes to the Vaxthus Master V3 project will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-02-17
+
+### Added
+- **Percentage Sliders**: Web interface sliders now display 0-100% values for better readability (internal logic remains 0-255).
+- **OTA Upload Config**: Added direct IP upload configuration to `platformio.ini` to enable VS Code "Upload" button for this specific device.
+
+### Fixed
+- **Button Text**: Fixed emoji encoding issue by using HTML entity `&#127749;` for the sunrise icon.
+- **OTA Reliability**: Configured upload port and auth flags for consistent wireless updates.
+
 ## [3.4.1] - 2026-02-08
 
 ### Fixed
