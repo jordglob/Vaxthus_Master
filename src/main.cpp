@@ -768,28 +768,36 @@ String get_index_html() {
         <p class='info-text'>Moving sliders activates Manual Mode for 40 minutes. UV is limited to 80% in Auto Mode to extend LED lifespan.</p>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>White</span><span id='white_val'>)rawliteral" + String(light_white) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_white) + R"rawliteral(' class='white' id='white' onchange='setLight("white", this.value)'>
+            <div class='slider-label'><span>White</span><span id='white_val'>)rawliteral" + String((int)((light_white / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_white) + R"rawliteral(' class='white' id='white' onchange='setLight("white", this.value)' oninput='updateLabel("white", this.value)'>
         </div>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>Red</span><span id='red_val'>)rawliteral" + String(light_red) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_red) + R"rawliteral(' class='red' id='red' onchange='setLight("red", this.value)'>
+            <div class='slider-label'><span>Red</span><span id='red_val'>)rawliteral" + String((int)((light_red / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_red) + R"rawliteral(' class='red' id='red' onchange='setLight("red", this.value)' oninput='updateLabel("red", this.value)'>
         </div>
 
         <div class='slider-container'>
-            <div class='slider-label'><span>UV</span><span id='uv_val'>)rawliteral" + String(light_uv) + R"rawliteral(</span></div>
-            <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)'>
+            <div class='slider-label'><span>UV</span><span id='uv_val'>)rawliteral" + String((int)((light_uv / 255.0) * 100)) + R"rawliteral(%</span></div>
+            <input type='range' min='0' max='255' value=')rawliteral" + String(light_uv) + R"rawliteral(' class='uv' id='uv' onchange='setLight("uv", this.value)' oninput='updateLabel("uv", this.value)'>
         </div>
         
-        <button id='autoBtn' class='btn' onclick='exitManual()'>Return to Auto Mode</button>
+        <button id='autoBtn' class='btn' onclick='exitManual()'>&#127749; Return to Auto Mode</button>
     </div>
 
     <p><a href='/settings'>Settings</a></p>
 
     <script>
+        function toPercent(val) {
+            return Math.round((val / 255) * 100) + '%';
+        }
+
+        function updateLabel(channel, value) {
+            document.getElementById(channel + '_val').innerText = toPercent(value);
+        }
+
         function setLight(channel, value) {
-            document.getElementById(channel + '_val').innerText = value;
+            updateLabel(channel, value);
             fetch('/setLight?' + channel + '=' + value);
         }
 
@@ -835,6 +843,14 @@ String get_index_html() {
                         }
                         document.getElementById('autoBtn').style.display = 'inline-block';
                     }
+
+                    // Update sliders if not currently being dragged (and convert to %)
+                    ['white', 'red', 'uv'].forEach(c => {
+                        if (document.activeElement.id !== c) {
+                            document.getElementById(c).value = d[c];
+                            document.getElementById(c + '_val').innerText = toPercent(d[c]);
+                        }
+                    });
                 });
         }
 
