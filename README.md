@@ -8,22 +8,23 @@
 
 ## ✨ Features
 
-- **📅 Robust Local Scheduling (v3.5.0)**: Autonomous time-based schedule independent of WiFi/MQTT
-- **📈 Smooth Ramping (v3.5.0)**: 15-minute natural transitions between schedule blocks
-- ** Real-time Clock Display (v3.4.0)**: Live time display on main page with auto mode status
-- **🎨 Improved Mode Indicators (v3.4.0)**: Clear visual badges for AUTO/MANUAL mode with countdown
-- **📊 Manual Mode Countdown (v3.4.0)**: See exactly how many minutes remain in manual override
-- **📡 OTA Updates (v3.3.0)**: Upload firmware via WiFi - never need USB again!
-- **🛡️ UV LED Protection (v3.4.0)**: UV limited to 80% in auto mode to extend LED lifespan
-- **🌅 Manual Mode Exit (v3.2.0)**: Return to auto mode instantly with one click
-- **🎛️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)
-- **📱 Web Interface**: Responsive web dashboard accessible from any device
-- **🏠 Home Assistant Integration**: MQTT auto-discovery for seamless smart home integration
-- **⚙️ Manual Override**: 45-minute manual control with auto-resume
-- **🔧 Easy Configuration**: Web-based settings for WiFi and MQTT
-- **🕐 NTP Time Sync**: Automatic time synchronization for accurate sun simulation
-- **💾 Persistent Storage**: Settings and light states saved to non-volatile memory
-- **📊 Status Monitoring**: Real-time WiFi signal strength and connection status
+### 📅 Advanced Scheduling
+- **Robust Local Schedule**: Autonomous time-based engine runs directly on the MCU, independent of WiFi/MQTT availability.
+- **Smooth Ramping**: Natural 15-minute light transitions between schedule blocks (e.g., Sunrise, Mid-day boost).
+- **Precise Timing**: NTP synchronization with correct Swedish timezone handling (`CET/CEST`).
+
+### 🎛️ Control & Automation
+- **3-Channel PWM**: Independent 8-bit control (0-255) for White, Red, and UV LED channels.
+- **Manual Override**: Full manual control with 45-minute auto-resume safety feature.
+- **UV Protection**: Smart limiting of UV intensity to extend LED lifespan.
+- **Home Assistant**: Automatic MQTT discovery and seamless integration.
+
+### 💻 Web Dashboard
+- **Real-time Monitoring**: Live clock, connection status, and mode indicators.
+- **Interactive Controls**: Sliders for immediate light adjustment and mode switching.
+- **System Status**: WiFi signal strength, MQTT status, and manual override countdown.
+- **Easy Config**: Web-based setup for network and MQTT settings.
+- **OTA Updates**: Wireless firmware updates directly from PlatformIO.
 
 ## 🛠️ Hardware Requirements
 
@@ -256,18 +257,15 @@ Loading settings from NVM...
   MQTT Server: mqtt.revolt-energy.org:1883
   MQTT Enabled: Yes
 Initializing PWM channels...
-  White: 0, Red: 0, UV: 0
 Initializing WiFi...
   [WiFi] Got IP: 192.168.1.100
-  Connected! IP: 192.168.1.100
-Initializing web server...
-  Web server started on port 80
-Connecting to MQTT...
-MQTT connected!
-Initializing NTP time sync...
-  Time synced: 2026-01-25 05:30:15
+Initializing Time...
+  Time synced: 2026-02-27 06:00:00
 Setup complete!
-[Sun Sim] 05:31 → Light: 0% (Auto mode)
+[Schedule] Update Target: 06:00 -> W:255 R:204 UV:0
+[Manual] Override activated
+[MQTT] Switched to AUTO
+[Schedule] Manual override expired. Resuming Auto Mode.
 ```
 
 ## 🏗️ Architecture
@@ -290,7 +288,12 @@ See [AI_PRIMER.md](AI_PRIMER.md) for detailed architecture documentation.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Contributions are welcome! Whether it's a bug report, new feature, or documentation improvement.
+
+**Found a bug?** Please [open an issue](https://github.com/yourusername/Vaxthus_Master_V3/issues) with:
+1. ESP32 board model
+2. Serial monitor output
+3. Steps to reproduce
 
 ### Development Setup
 
@@ -317,18 +320,6 @@ This project is open source and available under the MIT License.
 - **dalathegreat** - For the Battery-Emulator architecture that inspired this project
 - **ArduinoJson** - JSON library by Benoit Blanchon
 - **PubSubClient** - MQTT library by Nick O'Leary
-
-## 📞 Support
-
-If you encounter issues:
-1. Check the [FAQ.md](FAQ.md)
-2. Review the [Troubleshooting](#-troubleshooting) section
-3. Check serial monitor output for error messages
-4. Open an issue on GitHub with:
-   - ESP32 board model
-   - PlatformIO version
-   - Serial monitor output
-   - Steps to reproduce the issue
 
 ---
 
