@@ -5,6 +5,27 @@ All notable changes to the Vaxthus Master V3 project will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-02-27
+
+### Added
+- **Robust Local Scheduling**: Implemented a robust, time-based schedule engine that runs autonomously on the MCU.
+  - **06:00 - 12:00**: Morning Growth (White 100%, Red 80%, UV 0%)
+  - **12:00 - 14:00**: Mid-day UV Boost (White 100%, Red 100%, UV 100%)
+  - **14:00 - 20:00**: Afternoon Biomass (White 80%, Red 100%, UV 0%)
+  - **20:00 - 20:30**: Sunset (White 0%, Red 50%, UV 0%)
+  - **20:30 - 06:00**: Night (All OFF)
+- **Smooth Ramping**: 15-minute smooth transitions between schedule changes for natural light progression.
+- **Enhanced Manual Override**:
+  - Auto-resumes schedule after **45 minutes** of inactivity.
+  - Instant response for manual adjustments (no ramp).
+  - Web UI displays countdown timer.
+- **Arduino Core 3.0 Compatibility**: Added compatibility layer for `ledcAttach` (new API) vs `ledcSetup` (old API), ensuring compilation on all PlatformIO versions.
+- **Precise Timezone**: Updated NTP config to use correct POSIX string for Sweden (`CET-1CEST,M3.5.0,M10.5.0/3`).
+
+### Changed
+- **Schedule Logic**: Replaced continuous "sun simulation" ramp with discrete schedule blocks.
+- **Manual Timeout**: Increased from 40 to 45 minutes.
+
 ## [3.4.2] - 2026-02-17
 
 ### Added

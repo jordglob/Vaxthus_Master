@@ -1,6 +1,6 @@
 # Vaxthus Master V3 - Grow Light Controller
 
-![Version](https://img.shields.io/badge/version-3.4.0-brightgreen)
+![Version](https://img.shields.io/badge/version-3.5.0-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32-orange)
 
@@ -8,17 +8,18 @@
 
 ## ✨ Features
 
-- **🕐 Real-time Clock Display (v3.4.0)**: Live time display on main page with auto mode status
+- **📅 Robust Local Scheduling (v3.5.0)**: Autonomous time-based schedule independent of WiFi/MQTT
+- **📈 Smooth Ramping (v3.5.0)**: 15-minute natural transitions between schedule blocks
+- ** Real-time Clock Display (v3.4.0)**: Live time display on main page with auto mode status
 - **🎨 Improved Mode Indicators (v3.4.0)**: Clear visual badges for AUTO/MANUAL mode with countdown
 - **📊 Manual Mode Countdown (v3.4.0)**: See exactly how many minutes remain in manual override
 - **📡 OTA Updates (v3.3.0)**: Upload firmware via WiFi - never need USB again!
 - **🛡️ UV LED Protection (v3.4.0)**: UV limited to 80% in auto mode to extend LED lifespan
 - **🌅 Manual Mode Exit (v3.2.0)**: Return to auto mode instantly with one click
-- **🌅 Automatic Sun Simulation**: Mimics natural daylight cycles with sunrise (06:00-10:00) and sunset (18:00-22:00) transitions
 - **🎛️ 3-Channel PWM Control**: Independent control of White, Red, and UV LED channels (0-255 brightness levels)
 - **📱 Web Interface**: Responsive web dashboard accessible from any device
 - **🏠 Home Assistant Integration**: MQTT auto-discovery for seamless smart home integration
-- **⚙️ Manual Override**: 40-minute manual control before returning to automatic mode
+- **⚙️ Manual Override**: 45-minute manual control with auto-resume
 - **🔧 Easy Configuration**: Web-based settings for WiFi and MQTT
 - **🕐 NTP Time Sync**: Automatic time synchronization for accurate sun simulation
 - **💾 Persistent Storage**: Settings and light states saved to non-volatile memory
@@ -118,18 +119,18 @@ pio run -t upload --upload-port vaxthus-master.local
 
 ## 🌞 Sun Simulation Schedule
 
-The controller mimics natural sunlight cycles:
+The controller runs a robust daily schedule with smooth 15-minute transitions:
 
-| Time Period | Light Level | Description |
-|-------------|-------------|-------------|
-| 00:00 - 06:00 | 0% | Night (all lights off) |
-| 06:00 - 10:00 | 0% → 100% | Sunrise (gradual ramp up) |
-| 10:00 - 18:00 | 100% | Full daylight |
-| 18:00 - 22:00 | 100% → 0% | Sunset (gradual ramp down) |
-| 22:00 - 00:00 | 0% | Night (all lights off) |
+| Time Period | White | Red | UV | Description |
+|-------------|-------|-----|----|-------------|
+| 06:00 - 12:00 | 100% | 80% | 0% | Morning Growth |
+| 12:00 - 14:00 | 100% | 100% | 100% | Mid-day UV Boost |
+| 14:00 - 20:00 | 80% | 100% | 0% | Afternoon Biomass |
+| 20:00 - 20:30 | 0% | 50% | 0% | Sunset |
+| 20:30 - 06:00 | 0% | 0% | 0% | Night |
 
 ### Manual Override
-- Adjusting any light channel activates **manual mode** for 40 minutes
+- Adjusting any light channel activates **manual mode** for 45 minutes
 - System automatically returns to sun simulation after timeout
 - Current mode is indicated in the serial monitor output
 
@@ -183,19 +184,12 @@ Three light entities will appear:
 
 ### Modify Sun Simulation Schedule
 
-Edit `src/main.cpp` and adjust these constants:
-
-```cpp
-#define SUNRISE_START_HOUR   6   // Sunrise begins
-#define SUNRISE_END_HOUR     10  // Full brightness reached
-#define SUNSET_START_HOUR    18  // Sunset begins
-#define SUNSET_END_HOUR      22  // Lights off
-```
+Edit `checkSchedule()` function in `src/main.cpp` to adjust time slots and intensity.
 
 ### Change Manual Override Duration
 
 ```cpp
-#define MANUAL_OVERRIDE_DURATION 2400000  // 40 minutes (in milliseconds)
+#define MANUAL_OVERRIDE_TIMEOUT 2700000  // 45 minutes (in milliseconds)
 ```
 
 ### Adjust PWM Frequency
